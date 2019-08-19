@@ -24,6 +24,9 @@ path = "src/word_count_para_fine.rs"
 name = "wc-parallel-chunked"
 path = "src/word_count_para_chunked.rs"
 
+[[bin]]
+name = "wc-parallel-partition"
+path = "src/word_count_para_partition.rs"
 
 #[[bin]]
 #name = "wc-timely"

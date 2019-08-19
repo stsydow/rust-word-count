@@ -1,8 +1,8 @@
 RUSTFLAGS="-C force-frame-pointers -C target-cpu=native"
-TEXT=~/dev/test_data/100M_rand_text.txt
-#TEXT=~/dev/test_data/rand_text.txt
+#TEXT=~/dev/test_data/100M_rand_text.txt
+TEXT=~/dev/test_data/rand_text.txt
 
-RUNS=3
+RUNS=2
 PERF="perf stat -r${RUNS} -e task-clock  -e cycles:u -e instructions:u"
 
 THREADS=4
