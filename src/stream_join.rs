@@ -1,7 +1,5 @@
 use futures::{Poll, Stream, Async, try_ready};
-use std::collections::{BinaryHeap};
-use tokio::sync::mpsc::{Sender, Receiver};
-use tokio::sync::mpsc::error::RecvError;
+use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 
 struct QueueItem<Event> {
@@ -30,16 +28,18 @@ impl<Event> PartialEq for  QueueItem<Event> {
 
 impl<Event> Eq for  QueueItem<Event> { }
 
-pub struct Join<Event, FOrd>
+pub struct Join<EventStream, FOrd>
+    where EventStream: Stream
 //where FOrd: Fn(&Event) -> u64
 {
     calc_order: FOrd,
-    pipelines:Vec<Receiver<Event>>,
-    last_values:BinaryHeap<QueueItem<Event>>,
+    pipelines:Vec<EventStream>,
+    last_values:BinaryHeap<QueueItem<EventStream::Item>>,
 }
 
-impl<Event, FOrd> Join<Event, FOrd>
-    where FOrd: Fn(&Event) -> u64,
+impl<EventStream, FOrd> Join<EventStream, FOrd>
+    where EventStream: Stream,
+        FOrd: Fn(&EventStream::Item) -> u64
 {
     pub fn new(calc_order: FOrd) -> Self
     {
@@ -50,7 +50,7 @@ impl<Event, FOrd> Join<Event, FOrd>
         }
     }
 
-    pub fn add(&mut self, stream: Receiver<Event>) {
+    pub fn add(&mut self, stream: EventStream) {
         self.pipelines.push(stream);
         self.last_values.push(QueueItem{event:None,
             order: 0,
@@ -58,35 +58,33 @@ impl<Event, FOrd> Join<Event, FOrd>
     }
 }
 
-impl<Event, FOrd> Stream for Join<Event, FOrd>
-    where //Ctx:Context<Event=Event, Result=R>,
-        FOrd: Fn(&Event) -> u64,
+impl<EventStream, FOrd> Stream for Join<EventStream, FOrd>
+    where EventStream: Stream,
+        FOrd: Fn(&EventStream::Item) -> u64,
 {
-    type Item = Event;
-    type Error = RecvError;
+    type Item = EventStream::Item;
+    type Error = EventStream::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.last_values.peek() {
             Some(q_item) => {
                 let index = q_item.pipeline_index;
-                let async_event = try_ready!(self.pipelines[index].poll());
-                //TODO handle closed streams
-                let result = match async_event {
-                    Some(new_event)=> {
-                        let old_event = self.last_values.pop().unwrap().event; //peek went ok already
+                let async_event = try_ready!(self.pipelines[index].poll()); //leave on error
 
+                let old_event = self.last_values.pop().unwrap().event; //peek went ok already
+                match async_event {
+                    Some(new_event)=> {
                         let key = (self.calc_order)(&new_event);
                         self.last_values.push(QueueItem{
                             event: Some(new_event),
                             order: key,
                             pipeline_index: index
                         });
-
-                        old_event
                     },
-                    None => None
+                    None => () // stream is done - don't queue it again.
                 };
-                Ok(Async::Ready(result))
+
+                Ok(Async::Ready(old_event))
             },
             None => Ok(Async::Ready(None))
         }

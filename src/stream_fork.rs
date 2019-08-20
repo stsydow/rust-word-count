@@ -1,138 +1,67 @@
-use futures::{Poll, Stream, Sink, Async, try_ready};
-use std::collections::{BinaryHeap};
-use tokio::sync::mpsc::{Sender, Receiver};
-use tokio::sync::mpsc::error::RecvError;
-use std::cmp::Ordering;
-use crate::stream_join::Join;
+use futures::{Poll, Sink, Async, try_ready, StartSend};
+use std::iter::FromIterator;
 
-pub struct Fork<Event, InStream, FSel>
+pub struct Fork<EventSink, FSel>
 {
     selector: FSel,
-    pipelines:Vec<Sender<Event>>,
-    input:InStream
+    pipelines:Vec<EventSink>
 }
 
-impl<Event, InStream, FSel> Fork<Event, InStream, FSel>
-where InStream:Stream<Item=Event>,
-      FSel: Fn(&Event) -> usize,
+impl<FSel, EventSink> Fork<EventSink, FSel>
+where EventSink: Sink,
+      FSel: Fn(&EventSink::SinkItem) -> usize
 {
-    pub fn new(input:InStream, selector: FSel) -> Self
+    pub fn new<I:IntoIterator<Item=EventSink>>(selector: FSel, sinks: I) -> Self
     {
+        let pipelines = Vec::from_iter(sinks);
+        assert!(!pipelines.is_empty());
+
         Fork {
             selector,
-            pipelines: Vec::new(),
-            input
+            pipelines
         }
     }
-}
 
-pub struct ParallelPipeline<InEvent, InStream, OutEvent, FSel, FOrd, FBuildPipeline>
-{
-    fork: Fork<InEvent, InStream, FSel>,
-    join: Join<OutEvent, FOrd>,
-    build_pipeline: FBuildPipeline
-}
-
-impl<InEvent, InStream, OutEvent, FSel, FOrd, FBuildPipeline> ParallelPipeline<InEvent, InStream, OutEvent, FSel, FOrd, FBuildPipeline>
-    where InStream:Stream<Item=InEvent>,
-          FSel: Fn(&InEvent) -> usize,
-          FOrd: Fn(&OutEvent) -> u64,
-          FBuildPipeline: Fn(Receiver<InEvent>, Sender<OutEvent>)
-{
-    pub fn new(input: InStream, selector: FSel, cmp: FOrd, build_pipeline: FBuildPipeline) -> Self
-    {
-        let fork = Fork::new(input, selector);
-        let join = Join::new(cmp);
-        ParallelPipeline {
-            fork,
-            join,
-            build_pipeline
-        }
+    /*
+    pub fn add(&mut self, sink: EventSink) {
+        self.pipelines.push(sink);
     }
+    */
 }
 
+impl<FSel, S> Sink for Fork<S, FSel>
+where
+    S: Sink,
+    FSel: Fn(&S::SinkItem) -> usize
 
-/*
-pub fn selective_context<Event, R, Key, Ctx, InStream, CtxInit, FSel, FWork> (input:InStream, ctx_builder: CtxInit, selector: FSel, work: FWork) -> SelectiveContext<Key, Ctx, InStream, CtxInit, FSel, FWork>
-    where //Ctx:Context<Event=Event, Result=R>,
-          InStream:Stream<Item=Event>,
-          Key: Ord,
-          CtxInit:Fn(&Key) -> Ctx,
-          FSel: Fn(&Event) -> Key,
-          FWork:Fn(&mut Ctx, &Event) -> R
 {
-    SelectiveContext {
-        ctx_init: ctx_builder,
-        selector,
-        work,
-        context_map: BTreeMap::new(),
-        input
-    }
-}
-*/
+    type SinkItem = S::SinkItem;
+    type SinkError = S::SinkError;
 
-/*
-impl<Event, Error, Ctx, InStream, FSel> Sink for Fork<Event, InStream, FSel>
-    where //Ctx:Context<Event=Event, Result=R>,
-          InStream:Stream<Item=Event, Error=Error>,
-          FSel: Fn(&Event) -> usize
-{
-    type SinkItem = Event;
-    type SinkError = Error;
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        let index = (self.selector)(&item) % self.pipelines.len();
+        let sink = &mut self.pipelines[index];
 
-    fn start_send(
-        &mut self,
-        item: Self::SinkItem
-    ) -> StartSend<Self::SinkItem, Self::SinkError> {
-        // Attempt to complete processing any outstanding requests.
-        self.left.keep_flushing()?;
-        self.right.keep_flushing()?;
-        // Only if both downstream sinks are ready, start sending the next item.
-        if self.left.is_ready() && self.right.is_ready() {
-            self.left.state = self.left.sink.start_send(item.clone())?;
-            self.right.state = self.right.sink.start_send(item)?;
-            Ok(AsyncSink::Ready)
-        } else {
-            Ok(AsyncSink::NotReady(item))
-        }
+        sink.start_send(item)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        let left_async = self.left.poll_complete()?;
-        let right_async = self.right.poll_complete()?;
-        // Only if both downstream sinks are ready, signal readiness.
-        if left_async.is_ready() && right_async.is_ready() {
-            Ok(Async::Ready(()))
-        } else {
-            Ok(Async::NotReady)
+
+        for sink in self.pipelines.iter_mut() {
+            try_ready!(sink.poll_complete());
         }
+
+        Ok(Async::Ready(()))
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
 
-        let left_async = self.left.close()?;
-        let right_async = self.right.close()?;
-        // Only if both downstream sinks are ready, signal readiness.
-        if left_async.is_ready() && right_async.is_ready() {
-            Ok(Async::Ready(()))
-        } else {
-            Ok(Async::NotReady)
+        for i in 0 .. self.pipelines.len() {
+            let sink = &mut self.pipelines[i];
+            try_ready!(sink.close());
+            self.pipelines.remove(i);
         }
-    }
-    /*
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let async_event = try_ready!(self.input.poll());
-        let result = match async_event {
-            Some(event)=> {
-                let index = (self.selector)(&event) % self.pipelines.len();
-                let pipeline = self.pipelines[index];
-                pipeline.send(event)
-            },
-            None => None
-        };
 
         Ok(Async::Ready(()))
     }
-    */
 }
-*/
