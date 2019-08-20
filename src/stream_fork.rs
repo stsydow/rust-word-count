@@ -1,17 +1,16 @@
 use futures::{Poll, Sink, Async, try_ready, StartSend};
 use std::iter::FromIterator;
 
-pub struct Fork<EventSink, FSel>
+pub struct Fork<S:Sink, FSel>
 {
     selector: FSel,
-    pipelines:Vec<EventSink>
+    pipelines:Vec<S>
 }
 
-impl<FSel, EventSink> Fork<EventSink, FSel>
-where EventSink: Sink,
-      FSel: Fn(&EventSink::SinkItem) -> usize
+impl<S:Sink, FSel> Fork<S, FSel>
+where FSel: Fn(&S::SinkItem) -> usize
 {
-    pub fn new<I:IntoIterator<Item=EventSink>>(selector: FSel, sinks: I) -> Self
+    pub fn new<I:IntoIterator<Item=S>>(selector: FSel, sinks: I) -> Self
     {
         let pipelines = Vec::from_iter(sinks);
         assert!(!pipelines.is_empty());
@@ -29,11 +28,9 @@ where EventSink: Sink,
     */
 }
 
-impl<FSel, S> Sink for Fork<S, FSel>
+impl<S: Sink, FSel> Sink for Fork<S, FSel>
 where
-    S: Sink,
     FSel: Fn(&S::SinkItem) -> usize
-
 {
     type SinkItem = S::SinkItem;
     type SinkError = S::SinkError;
