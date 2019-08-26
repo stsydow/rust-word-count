@@ -84,7 +84,10 @@ impl<EventStream, FOrd> Stream for Join<EventStream, FOrd>
                     None => () // stream is done - don't queue it again.
                 };
 
-                Ok(Async::Ready(old_event))
+                match old_event {
+                    Some(event) => Ok(Async::Ready(Some(event))),
+                    None => self.poll()
+                }
             },
             None => Ok(Async::Ready(None))
         }

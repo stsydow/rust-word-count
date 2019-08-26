@@ -19,6 +19,13 @@ use futures::future::FutureResult;
 use word_count::util::*;
 
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+
+use word_count::stream_join::Join;
+use word_count::stream_fork::Fork;
+use std::sync::Arc;
+
+const BUFFER_SIZE:usize = 4;
+
 //use futures::sync::mpsc::channel;
 
 const CHUNKS_CAPACITY:usize = 256;
@@ -32,7 +39,7 @@ fn pipeline_task<InItem, OutItem, FBuildPipeline, OutStream, E>(src: Receiver<In
     future::lazy(move || {
         let stream = builder(src);
         stream.forward(sink.sink_map_err(|e| { panic!("send_err:{}", e) }))
-            .map(|(_stream, _sink)| ())
+            .map(|(_stream, sink)| ())
             .map_err(|e| { panic!("pipe_err:{:?}", e) })
     })
 }
@@ -64,88 +71,70 @@ fn main() -> io::Result<()> {
     let input_stream = FramedRead::new(input, RawWordCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
+    let (fork, join) = {
 
-    let (in_tx, in_rx) = channel::<Vec<BytesMut>>(2);
+        let task_fn = |stream: Receiver<BytesMut>| {
+            let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
+            let table_future = stream
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+                .fold(frequency,
+                      |mut frequency, word|
+                          {
+                              if !word.is_empty() {
+                                  *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                              }
 
-    let file_reader = input_stream.chunks(CHUNKS_CAPACITY)
-        .forward(in_tx
+                              let result: FutureResult<_, io::Error> = future::ok(frequency);
+                              result
+                          }
+                );
+
+            table_future.map(|frequency|
+                {
+                    let mut frequency_vec = Vec::from_iter(frequency);
+                    frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+                    stream::iter_ok(frequency_vec)
+                }).flatten_stream()//.chunks(CHUNKS_CAPACITY)
+        };
+
+
+        const pipe_count: usize = 4;
+        let mut senders = Vec::new();
+        let mut join = Join::new(|(_word, count)| { *count});
+
+        for _i in 0 .. pipe_count {
+            let (in_tx, in_rx) = channel::<BytesMut>(BUFFER_SIZE);
+            let (out_tx, out_rx) = channel::<(Vec<u8>, u64)>(BUFFER_SIZE);
+            senders.push(in_tx);
+            let pipe = pipeline_task(in_rx, out_tx, task_fn);
+            runtime.spawn(pipe);
+            join.add(out_rx);
+        }
+
+        let fork = Fork::new(|word| word.len(), senders);
+
+        (fork, join)
+    };
+
+
+    let file_reader = input_stream//.chunks(CHUNKS_CAPACITY)
+        .forward(fork
             .sink_map_err(|e| io::Error::new(io::ErrorKind::Other, format!("send error: {}", e))))
         .map(|(_in, _out)| ())
         .map_err(|e| { eprintln!("error: {}", e); panic!()});
     runtime.spawn(file_reader);
 
-    let frequency: HashMap<Vec<u8>, u32> = HashMap::new();
-
-    let (out_tx, out_rx) = channel::<Vec<(Vec<u8>, u32)>>(1024);
-
-    let processor = pipeline_task(in_rx, out_tx, |stream| {
-        let table_future = stream
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-            .fold(frequency,
-              |mut frequency, chunk|
-                  {
-                      for word in chunk {
-                          if !word.is_empty() {
-                              *frequency.entry(word.to_vec()).or_insert(0) += 1;
-                          }
-                      }
-
-                      let result: FutureResult<_, io::Error> = future::ok(frequency);
-                      result
-                  }
-        );
-
-        table_future.map(|frequency|
-            {
-            let mut frequency_vec = Vec::from_iter(frequency);
-            frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-            stream::iter_ok(frequency_vec)
-        }).flatten_stream().chunks(CHUNKS_CAPACITY)
-    });
-    /*
-    let processor = in_rx
+    let file_writer = join
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(frequency,
-            |mut frequency, chunk|
-                {
-                    for word in chunk {
-                        if !word.is_empty() {
-                            *frequency.entry(word.to_vec()).or_insert(0) += 1;
-                        }
-                    }
-
-                    let result: FutureResult<_, io::Error> = future::ok(frequency);
-                    result
-                }
-    ).map(|frequency| {
-        let mut frequency_vec = Vec::from_iter(frequency);
-        frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-        stream::iter_ok(frequency_vec)
-    }).and_then(| word_freq_stream | {
-        word_freq_stream
-            .chunks(CHUNKS_CAPACITY)
-            .forward(out_tx.sink_map_err(|e|  io::Error::new(io::ErrorKind::Other, format!("send error: {}", e))))
-            .map(|(_word_stream, _writer)| ())
-    }).map_err(|e|{ eprintln!("error: {}", e); panic!()});
-    */
-    runtime.spawn(processor);
-
-    let file_writer = out_rx
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .map(|chunk| {
+        .map(|(word_raw, count) | {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
-            //let mut text_chunk = String::with_capacity(CHUNKS_CAPACITY * 15);
-            for (word_raw, count) in chunk {
-
-                let word = utf8(&word_raw).expect("UTF8 encoding error");
-                buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
-            }
+            let word = utf8(&word_raw).expect("UTF8 encoding error");
+            buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
             buffer.freeze()
         })
-        .forward(output_stream)
-        .map(|(_word_stream, _out_file)| ());
+        .forward(output_stream);
 
-    runtime.block_on(file_writer)?;
+    let (_word_stream, _out_file) = runtime.block_on(file_writer)?;
 
     runtime.shutdown_on_idle();
 
