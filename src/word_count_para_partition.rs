@@ -18,7 +18,24 @@ use bytes::{BytesMut};
 use futures::future::FutureResult;
 use word_count::util::*;
 
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+//use futures::sync::mpsc::channel;
+
 const CHUNKS_CAPACITY:usize = 256;
+
+fn pipeline_task<InItem, OutItem, FBuildPipeline, OutStream, E>(src: Receiver<InItem>, sink:Sender<OutItem>, builder: FBuildPipeline)
+                                                                 -> impl Future<Item=(), Error=()>
+    where E:std::error::Error,
+          OutStream: Stream<Item=OutItem, Error=E>,
+          FBuildPipeline: FnOnce(Receiver<InItem>) -> OutStream
+{
+    future::lazy(move || {
+        let stream = builder(src);
+        stream.forward(sink.sink_map_err(|e| { panic!("send_err:{}", e) }))
+            .map(|(_stream, _sink)| ())
+            .map_err(|e| { panic!("pipe_err:{:?}", e) })
+    })
+}
 
 fn main() -> io::Result<()> {
 
@@ -47,8 +64,7 @@ fn main() -> io::Result<()> {
     let input_stream = FramedRead::new(input, RawWordCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    use tokio::sync::mpsc::channel;
-    //use futures::sync::mpsc::channel;
+
     let (in_tx, in_rx) = channel::<Vec<BytesMut>>(2);
 
     let file_reader = input_stream.chunks(CHUNKS_CAPACITY)
@@ -62,6 +78,31 @@ fn main() -> io::Result<()> {
 
     let (out_tx, out_rx) = channel::<Vec<(Vec<u8>, u32)>>(1024);
 
+    let processor = pipeline_task(in_rx, out_tx, |stream| {
+        let table_future = stream
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+            .fold(frequency,
+              |mut frequency, chunk|
+                  {
+                      for word in chunk {
+                          if !word.is_empty() {
+                              *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                          }
+                      }
+
+                      let result: FutureResult<_, io::Error> = future::ok(frequency);
+                      result
+                  }
+        );
+
+        table_future.map(|frequency|
+            {
+            let mut frequency_vec = Vec::from_iter(frequency);
+            frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            stream::iter_ok(frequency_vec)
+        }).flatten_stream().chunks(CHUNKS_CAPACITY)
+    });
+    /*
     let processor = in_rx
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
         .fold(frequency,
@@ -86,7 +127,7 @@ fn main() -> io::Result<()> {
             .forward(out_tx.sink_map_err(|e|  io::Error::new(io::ErrorKind::Other, format!("send error: {}", e))))
             .map(|(_word_stream, _writer)| ())
     }).map_err(|e|{ eprintln!("error: {}", e); panic!()});
-
+    */
     runtime.spawn(processor);
 
     let file_writer = out_rx

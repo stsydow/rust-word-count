@@ -35,14 +35,14 @@ impl Decoder for RawWordCodec {
             // Found a line!
             let whitespace_index = offset;
             let mut word = buf.split_to(whitespace_index + 1);
+
             /*
             let word = &word[..word.len() - 1];
             let word = utf8(word)?;
 
             Some(word.to_string())
             */
-            let _space = word.split_off(1);
-
+            let _space = word.split_off(word.len() -1);
             Some(word)
         } else {
             None
