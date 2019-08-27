@@ -14,7 +14,7 @@ use tokio::runtime::Runtime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
-use bytes::{BytesMut};
+use bytes::{BytesMut, BufMut};
 use futures::future::FutureResult;
 use word_count::util::*;
 
@@ -106,11 +106,15 @@ fn main() -> io::Result<()> {
     let file_writer = out_rx
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
         .map(|chunk| {
-            let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
+            let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 20);
             //let mut text_chunk = String::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
 
                 let word = utf8(&word_raw).expect("UTF8 encoding error");
+                let max_len = word_raw.len() + 15;
+                if buffer.remaining_mut() < max_len {
+                    buffer.reserve(10*max_len);
+                }
                 buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
             }
             buffer.freeze()

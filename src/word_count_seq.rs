@@ -11,7 +11,9 @@ use std::fs::File;
 
 use word_count::util::*;
 
-fn main() -> io::Result<()> {
+#[inline(never)]
+fn read_file() -> io::Result<String>
+{
     let conf = parse_args("word count simple");
 
     let mut buffer = String::new();
@@ -20,16 +22,23 @@ fn main() -> io::Result<()> {
     } else {
         io::stdin().read_to_string(&mut buffer)?;
     }
+
+    return Ok(buffer);
+}
+
+#[inline(never)]
+fn tokenize<'a>(buffer: &'a String) -> HashMap<&'a str, u32> {
     // Primitive Tokenize
-    let mut frequency: HashMap<&str, u32> = HashMap::new();
+    let mut frequency: HashMap<&'a str, u32> = HashMap::new();
     for word in buffer.split_ascii_whitespace(){
         *frequency.entry(&*word).or_insert(0) += 1;
     }
 
-    // Sort by value
-    let mut frequency = Vec::from_iter(frequency);
-    frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+    return frequency;
+}
 
+#[inline(never)]
+fn write_out(frequency: &Vec<(&str, u32)>) -> io::Result<()>{
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
@@ -41,4 +50,17 @@ fn main() -> io::Result<()> {
         io::copy(&mut out.as_bytes(), &mut stdout)?;
     }
     Ok(())
+}
+
+fn main() -> io::Result<()> {
+
+    let buffer = read_file()?;
+
+    let frequency = tokenize(&buffer);
+
+    // Sort by value
+    let mut frequency = Vec::from_iter(frequency);
+    frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+
+    write_out(&frequency)
 }

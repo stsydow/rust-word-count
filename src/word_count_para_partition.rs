@@ -22,12 +22,11 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use word_count::stream_join::Join;
 use word_count::stream_fork::Fork;
+use std::cmp::max;
 
 const BUFFER_SIZE:usize = 4;
 
 //use futures::sync::mpsc::channel;
-
-const CHUNKS_CAPACITY:usize = 256;
 
 fn pipeline_task<InItem, OutItem, FBuildPipeline, OutStream, E>(src: Receiver<InItem>, sink:Sender<OutItem>, builder: FBuildPipeline)
                                                                  -> impl Future<Item=(), Error=()>
@@ -99,7 +98,8 @@ fn main() -> io::Result<()> {
         let mut senders = Vec::new();
         let mut join = Join::new(|(_word, count)| { *count});
 
-        for _i in 0 .. conf.threads {
+        let pipe_theards = max(1,  conf.threads -1); // discount I/O Thread
+        for _i in 0 .. pipe_theards {
             let (in_tx, in_rx) = channel::<BytesMut>(BUFFER_SIZE);
             let (out_tx, out_rx) = channel::<(Vec<u8>, u64)>(BUFFER_SIZE);
             senders.push(in_tx);
@@ -124,10 +124,10 @@ fn main() -> io::Result<()> {
     let file_writer = join
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
         .map(|(word_raw, count) | {
-            let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
-            let word = utf8(&word_raw).expect("UTF8 encoding error");
-            buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
-            buffer.freeze()
+            let mut bytes = BytesMut::with_capacity(word_raw.len() + 15);
+            bytes.extend_from_slice(&word_raw);
+            bytes.write_fmt(format_args!(" {}\n", count)).expect("Formating error");
+            bytes.freeze()
         })
         .forward(output_stream);
 

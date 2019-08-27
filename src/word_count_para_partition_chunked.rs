@@ -3,7 +3,7 @@
 // gcc -o lines lines.c
 // tar xzf llvm-8.0.0.src.tar.xz
 // find llvm-8.0.0.src -type f | xargs cat | tr -sc 'a-zA-Z0-9_' '\n' | perl -ne 'print unless length($_) > 1000;' | ./lines > words.txt
-#![feature(impl_trait_in_bindings)]
+//#![feature(impl_trait_in_bindings)]
 
 use std::io;
 use std::fmt::Write;
@@ -18,13 +18,14 @@ use tokio::runtime::Runtime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
-use bytes::{BytesMut};
+use bytes::{BytesMut, BufMut};
 
 use word_count::util::*;
 
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use word_count::stream_fork::{ForkRR};
+use std::cmp::{max};
 
 const BUFFER_SIZE:usize = 4;
 
@@ -39,12 +40,12 @@ fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InIt
           FBuildPipeline: FnOnce(Receiver<InItem>) -> OutFuture
 {
     future::lazy(move || {
-        let task = builder(src).map(|result| sink.send(result))
-        /*
-        stream.forward(sink.sink_map_err(|e| { panic!("send_err:{}", e) }))
-            .map(|(_stream, _sink)| ())
-
-            */
+        let task = builder(src)
+            .and_then(|result| {
+                sink
+                    .sink_map_err(|e| panic!("join send error: {}", e))
+                    .send(result)
+            })
             .map(|_sink| ())
             .map_err(|e| { panic!("pipe_err:{:?}", e) });
         task
@@ -95,15 +96,15 @@ fn main() -> io::Result<()> {
                               future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
                           }
                 );
-
             table_future
         };
 
         let mut senders = Vec::new();
         //let mut join = Join::new(|(_word, count)| { *count});
 
-        let (out_tx, out_rx) = channel::<HashMap<Vec<u8>, u64>>(1);
-        for _i in 0 .. conf.threads {
+        let pipe_theards = max(1,  conf.threads -1); // discount I/O Thread
+        let (out_tx, out_rx) = channel::<HashMap<Vec<u8>, u64>>(pipe_theards);
+        for _i in 0 .. pipe_theards {
             let (in_tx, in_rx) = channel::<Vec<BytesMut>>(BUFFER_SIZE);
 
             senders.push(in_tx);
@@ -119,13 +120,14 @@ fn main() -> io::Result<()> {
 
     let file_reader = input_stream.chunks(CHUNKS_CAPACITY)
         .forward(fork
-            .sink_map_err(|e| io::Error::new(io::ErrorKind::Other, format!("send error: {}", e))))
+            .sink_map_err(|e| io::Error::new(io::ErrorKind::Other, format!("fork send error: {}", e))))
         .map(|(_in, _out)| ())
         .map_err(|e| { eprintln!("error: {}", e); panic!()});
     runtime.spawn(file_reader);
 
-    let sub_table_stream: impl Stream<Item=HashMap<Vec<u8>, u64>, Error=io::Error> + Send = join
+    let sub_table_stream /*: impl Stream<Item=HashMap<Vec<u8>, u64>, Error=io::Error> + Send*/ = join
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
+
     let file_writer = sub_table_stream
         .fold(HashMap::<Vec<u8>, u64>::new(), |mut frequency, mut sub_table| {
                   for (word, count)  in sub_table.drain() {
@@ -136,13 +138,17 @@ fn main() -> io::Result<()> {
         .map(|mut frequency| {
                 let mut frequency_vec = Vec::from_iter(frequency.drain());
                 frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-                stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY)
+                stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
             })
         .flatten_stream()
         .map(|chunk| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk{
                 let word = utf8(&word_raw).expect("UTF8 encoding error");
+                let max_len = word_raw.len() + 15;
+                if buffer.remaining_mut() < max_len {
+                    buffer.reserve(10*max_len);
+                }
                 buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
             }
             buffer.freeze()
