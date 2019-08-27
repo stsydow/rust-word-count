@@ -3,25 +3,28 @@
 // gcc -o lines lines.c
 // tar xzf llvm-8.0.0.src.tar.xz
 // find llvm-8.0.0.src -type f | xargs cat | tr -sc 'a-zA-Z0-9_' '\n' | perl -ne 'print unless length($_) > 1000;' | ./lines > words.txt
+#![feature(impl_trait_in_bindings)]
 
 use std::io;
 use std::fmt::Write;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
+use futures::stream;
+use futures::future;
+use futures::{Stream};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use bytes::{BytesMut};
-use futures::future::FutureResult;
+
 use word_count::util::*;
 
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
-use word_count::stream_join::Join;
-use word_count::stream_fork::Fork;
+use word_count::stream_fork::{ForkRR};
 
 const BUFFER_SIZE:usize = 4;
 
@@ -29,17 +32,22 @@ const BUFFER_SIZE:usize = 4;
 
 const CHUNKS_CAPACITY:usize = 256;
 
-fn pipeline_task<InItem, OutItem, FBuildPipeline, OutStream, E>(src: Receiver<InItem>, sink:Sender<OutItem>, builder: FBuildPipeline)
+fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InItem>, sink:Sender<OutItem>, builder: FBuildPipeline)
                                                                  -> impl Future<Item=(), Error=()>
     where E:std::error::Error,
-          OutStream: Stream<Item=OutItem, Error=E>,
-          FBuildPipeline: FnOnce(Receiver<InItem>) -> OutStream
+          OutFuture: Future<Item=OutItem, Error=E>,
+          FBuildPipeline: FnOnce(Receiver<InItem>) -> OutFuture
 {
     future::lazy(move || {
-        let stream = builder(src);
+        let task = builder(src).map(|result| sink.send(result))
+        /*
         stream.forward(sink.sink_map_err(|e| { panic!("send_err:{}", e) }))
             .map(|(_stream, _sink)| ())
-            .map_err(|e| { panic!("pipe_err:{:?}", e) })
+
+            */
+            .map(|_sink| ())
+            .map_err(|e| { panic!("pipe_err:{:?}", e) });
+        task
     })
 }
 
@@ -72,61 +80,71 @@ fn main() -> io::Result<()> {
 
     let (fork, join) = {
 
-        let task_fn = |stream: Receiver<BytesMut>| {
+        let task_fn = |stream: Receiver<Vec<BytesMut>>| {
             let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
             let table_future = stream
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
                 .fold(frequency,
-                      |mut frequency, word|
+                      |mut frequency, chunk|
                           {
-                              if !word.is_empty() {
-                                  *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                              for word in chunk {
+                                  if !word.is_empty() {
+                                      *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                                  }
                               }
-
-                              let result: FutureResult<_, io::Error> = future::ok(frequency);
-                              result
+                              future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
                           }
                 );
 
-            table_future.map(|frequency|
-                {
-                    let mut frequency_vec = Vec::from_iter(frequency);
-                    frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-                    stream::iter_ok(frequency_vec)
-                }).flatten_stream()//.chunks(CHUNKS_CAPACITY)
+            table_future
         };
 
         let mut senders = Vec::new();
-        let mut join = Join::new(|(_word, count)| { *count});
+        //let mut join = Join::new(|(_word, count)| { *count});
 
+        let (out_tx, out_rx) = channel::<HashMap<Vec<u8>, u64>>(1);
         for _i in 0 .. conf.threads {
-            let (in_tx, in_rx) = channel::<BytesMut>(BUFFER_SIZE);
-            let (out_tx, out_rx) = channel::<(Vec<u8>, u64)>(BUFFER_SIZE);
+            let (in_tx, in_rx) = channel::<Vec<BytesMut>>(BUFFER_SIZE);
+
             senders.push(in_tx);
-            let pipe = pipeline_task(in_rx, out_tx, task_fn);
+            let pipe = reduce_task(in_rx, out_tx.clone(), task_fn);
             runtime.spawn(pipe);
-            join.add(out_rx);
+            //join.add(out_rx);
         }
 
-        let fork = Fork::new(|word| word.len(), senders);
+        let fork = ForkRR::new(senders);
 
-        (fork, join)
+        (fork, out_rx)
     };
 
-
-    let file_reader = input_stream//.chunks(CHUNKS_CAPACITY)
+    let file_reader = input_stream.chunks(CHUNKS_CAPACITY)
         .forward(fork
             .sink_map_err(|e| io::Error::new(io::ErrorKind::Other, format!("send error: {}", e))))
         .map(|(_in, _out)| ())
         .map_err(|e| { eprintln!("error: {}", e); panic!()});
     runtime.spawn(file_reader);
 
-    let file_writer = join
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .map(|(word_raw, count) | {
+    let sub_table_stream: impl Stream<Item=HashMap<Vec<u8>, u64>, Error=io::Error> + Send = join
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
+    let file_writer = sub_table_stream
+        .fold(HashMap::<Vec<u8>, u64>::new(), |mut frequency, mut sub_table| {
+                  for (word, count)  in sub_table.drain() {
+                      *frequency.entry(word).or_insert(0) += count;
+                  }
+                future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
+              })
+        .map(|mut frequency| {
+                let mut frequency_vec = Vec::from_iter(frequency.drain());
+                frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+                stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY)
+            })
+        .flatten_stream()
+        .map(|chunk| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
-            let word = utf8(&word_raw).expect("UTF8 encoding error");
-            buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
+            for (word_raw, count) in chunk{
+                let word = utf8(&word_raw).expect("UTF8 encoding error");
+                buffer.write_fmt(format_args!("{} {}\n", word, count)).expect("Formating error");
+            }
             buffer.freeze()
         })
         .forward(output_stream);

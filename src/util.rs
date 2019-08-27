@@ -1,4 +1,4 @@
-use argparse::{ArgumentParser, Print, StoreOption};
+use argparse::{ArgumentParser, Print, StoreOption, Store};
 use std::{io, str, usize};
 use std::collections::HashMap;
 
@@ -70,12 +70,14 @@ impl Decoder for RawWordCodec {
 pub struct Config {
     pub output: Option<String>,
     pub input: Option<String>,
+    pub threads: usize,
 }
 
 pub fn parse_args(description: &str)  -> Config {
     let mut conf : Config = Config {
         output: None,
         input: None,
+        threads: 1,
     };
 
     {  // this block limits scope of borrows by ap.refer() method
@@ -91,6 +93,10 @@ pub fn parse_args(description: &str)  -> Config {
 
         ap.refer(&mut conf.output).add_argument(
             "output", StoreOption, "output file - default: stdout");
+
+        ap.refer(&mut conf.threads).add_option(
+            &["-t", "--threads"],
+            Store, "thread count - default: 1");
 
         ap.parse_args_or_exit();
     }
