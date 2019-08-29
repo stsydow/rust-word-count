@@ -5,13 +5,11 @@ use std::collections::HashMap;
 use tokio::codec::{Decoder};
 use bytes::{BytesMut};
 
-pub struct RawWordCodec {
-    _last_cursor: usize
-}
+pub struct RawWordCodec {}
 
 impl RawWordCodec {
     pub fn new() -> Self {
-        RawWordCodec{_last_cursor:0}
+        RawWordCodec{}
     }
 }
 
@@ -60,6 +58,80 @@ impl Decoder for RawWordCodec {
                     None
                 } else {
                     let word = buf.take();
+                    Some(word)
+                }
+            }
+        })
+    }
+}
+
+pub struct WordVecCodec {}
+
+impl WordVecCodec {
+    pub fn new() -> Self {
+        WordVecCodec{}
+    }
+}
+
+const APPROX_WORD_LEN:usize = 8;
+
+impl Decoder for WordVecCodec {
+    type Item = Vec<BytesMut>;
+    // TODO: in the next breaking change, this should be changed to a custom
+    // error type that indicates the "max length exceeded" condition better.
+    type Error = io::Error;
+
+
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<BytesMut>>, io::Error> {
+
+        if buf.len() >= 1_000_000 {
+            return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
+        }
+
+        let last_space = buf//[self.last_cursor..] // TODO use last cursor
+            .iter()
+            .rposition(|b| b.is_ascii_whitespace());
+
+        let some_words = if let Some(last_space_idx) = last_space {
+            let mut complete_words = buf.split_to(last_space_idx + 1);
+            let mut words = Vec::with_capacity(complete_words.len()/APPROX_WORD_LEN);
+            loop {
+                let mut white_space_idx = complete_words.len();
+                for i in 0 .. complete_words.len() {
+                    if complete_words[i].is_ascii_whitespace() {
+                        white_space_idx = i;
+                        break;
+                    }
+                }
+
+                if white_space_idx < complete_words.len(){
+
+                        let mut word = complete_words.split_to(white_space_idx + 1);
+                        let _space = word.split_off(word.len() -1);
+                        words.push(word);
+                } else {
+                    break;
+                }
+            }
+
+            Some(words)
+        } else {
+            None
+        };
+
+        return Ok(some_words);
+    }
+
+    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<BytesMut>>, io::Error> {
+        Ok(match self.decode(buf)? {
+            Some(frame) => Some(frame),
+            None => {
+                // No terminating newline - return remaining data, if any
+                if buf.is_empty() {
+                    None
+                } else {
+                    let mut word = Vec::new();
+                    word[0] = buf.take();
                     Some(word)
                 }
             }

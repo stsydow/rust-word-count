@@ -31,7 +31,7 @@ fn tokenize<'a>(buffer: &'a String) -> HashMap<&'a str, u32> {
     // Primitive Tokenize
     let mut frequency: HashMap<&'a str, u32> = HashMap::new();
     for word in buffer.split_ascii_whitespace(){
-        *frequency.entry(&*word).or_insert(0) += 1;
+        *frequency.entry(word).or_insert(0) += 1;
     }
 
     return frequency;

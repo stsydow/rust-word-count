@@ -52,52 +52,61 @@ fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InIt
     })
 }
 
-fn main() -> io::Result<()> {
+#[inline(never)]
+fn task_fn(stream: Receiver<Vec<BytesMut>>) -> impl Future<Item=HashMap<Vec<u8>, u64>, Error=io::Error>{
+    let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
+    let table_future = stream
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+        .fold(frequency,
+        |mut frequency, chunk|
+            {
+                for word in chunk {
+                    if !word.is_empty() {
+                    *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                    }
+                }
+                future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
+            });
+    table_future
+}
 
-    let conf = parse_args("word count parallel chunked");
-    let mut runtime = Runtime::new()?;
-
-    let input: Box<dyn AsyncRead + Send> = match conf.input {
+#[inline(never)]
+fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn AsyncWrite + Send>)
+{
+    let mut runtime = Runtime::new().expect("can't start async runtime");
+    let input: Box<dyn AsyncRead + Send> = match &conf.input {
         None => Box::new(stdin()),
         Some(filename) => {
-            let file_future =  File::open(filename);
+            let file_future =  File::open(filename.clone());
             let byte_stream = runtime.block_on(file_future).expect("Can't open input file.");
             Box::new(byte_stream)
         }
     };
 
-    let output: Box<dyn AsyncWrite + Send> = match conf.output {
+    let output: Box<dyn AsyncWrite + Send> = match &conf.output {
         None => Box::new(stdout()),
         Some(filename) => {
 
-            let file_future = OpenOptions::new().write(true).create(true).open(filename);
+            let file_future = OpenOptions::new().write(true).create(true).open(filename.clone());
             let byte_stream = runtime.block_on(file_future).expect("Can't open output file.");
             Box::new(byte_stream)
         }
     };
 
+    (input, output)
+}
+
+fn main() -> io::Result<()> {
+
+    let conf = parse_args("word count parallel chunked");
+    let mut runtime = Runtime::new()?;
+
+    let (input, output) = open_io_async(&conf);
+
     let input_stream = FramedRead::new(input, RawWordCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
     let (fork, join) = {
-
-        let task_fn = |stream: Receiver<Vec<BytesMut>>| {
-            let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
-            let table_future = stream
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-                .fold(frequency,
-                      |mut frequency, chunk|
-                          {
-                              for word in chunk {
-                                  if !word.is_empty() {
-                                      *frequency.entry(word.to_vec()).or_insert(0) += 1;
-                                  }
-                              }
-                              future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
-                          }
-                );
-            table_future
-        };
 
         let mut senders = Vec::new();
         //let mut join = Join::new(|(_word, count)| { *count});
