@@ -13,6 +13,10 @@ name = "wc-async"
 path = "src/word_count_async.rs"
 
 [[bin]]
+name = "wc-async-buf"
+path = "src/word_count_async_buf.rs"
+
+[[bin]]
 name = "wc-parallel"
 path = "src/word_count_para.rs"
 
@@ -25,11 +29,20 @@ name = "wc-parallel-chunked"
 path = "src/word_count_para_chunked.rs"
 
 [[bin]]
+name = "wc-parallel-buf"
+path = "src/word_count_para_buf.rs"
+
+[[bin]]
 name = "wc-parallel-partition"
 path = "src/word_count_para_partition.rs"
+
 [[bin]]
 name = "wc-parallel-partition-chunked"
 path = "src/word_count_para_partition_chunked.rs"
+
+[[bin]]
+name = "wc-parallel-partition-buf"
+path = "src/word_count_para_partition_buf.rs"
 
 #[[bin]]
 #name = "wc-timely"

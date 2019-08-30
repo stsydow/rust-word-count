@@ -31,6 +31,22 @@ const BUFFER_SIZE:usize = 4;
 
 const CHUNKS_CAPACITY:usize = 256;
 
+
+#[inline(never)]
+fn tokenize(frequency: &mut HashMap<Vec<u8>, u64>, text: &[u8])
+{
+    let mut i_start: usize = 0;
+    for i in 0 .. text.len() {
+        if text[i].is_ascii_whitespace() {
+            let word = &text[i_start .. i];
+            if !word.is_empty() {
+                *frequency.entry(word.to_vec()).or_insert(0) += 1;
+            }
+            i_start = i + 1;
+        }
+    }
+}
+
 fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InItem>, sink:Sender<OutItem>, builder: FBuildPipeline)
                                                                  -> impl Future<Item=(), Error=()>
     where E:std::error::Error,
@@ -51,31 +67,28 @@ fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InIt
 }
 
 #[inline(never)]
-fn task_fn(stream: Receiver<Vec<BytesMut>>) -> impl Future<Item=HashMap<Vec<u8>, u64>, Error=io::Error>{
+fn task_fn(stream: Receiver<BytesMut>) -> impl Future<Item=HashMap<Vec<u8>, u64>, Error=io::Error>{
     let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
     let table_future = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
         .fold(frequency,
-        |mut frequency, chunk|
-            {
-                for word in chunk {
-                    if !word.is_empty() {
-                    *frequency.entry(word.to_vec()).or_insert(0) += 1;
-                    }
-                }
-                future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
-            });
+              |mut frequency, text|
+              {
+                  tokenize(&mut frequency, &text);
+
+                  future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
+              });
     table_future
 }
 
 fn main() -> io::Result<()> {
 
-    let conf = parse_args("word count parallel chunked");
+    let conf = parse_args("word count parallel buf");
     let mut runtime = Runtime::new()?;
 
     let (input, output) = open_io_async(&conf);
 
-    let input_stream = FramedRead::new(input, WordVecCodec::new());
+    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
     let (fork, join) = {
@@ -86,7 +99,7 @@ fn main() -> io::Result<()> {
         let pipe_theards = max(1,  conf.threads -1); // discount I/O Thread
         let (out_tx, out_rx) = channel::<HashMap<Vec<u8>, u64>>(pipe_theards);
         for _i in 0 .. pipe_theards {
-            let (in_tx, in_rx) = channel::<Vec<BytesMut>>(BUFFER_SIZE);
+            let (in_tx, in_rx) = channel::<BytesMut>(BUFFER_SIZE);
 
             senders.push(in_tx);
             let pipe = reduce_task(in_rx, out_tx.clone(), task_fn);

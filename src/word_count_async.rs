@@ -11,8 +11,6 @@ use std::iter::FromIterator;
 
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-use tokio::fs::{File, OpenOptions};
-use tokio::io::{stdin, stdout};
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use bytes::Bytes;
 use futures::future::FutureResult;
@@ -23,24 +21,7 @@ fn main() -> StdResult<()> {
     let conf = parse_args("word count async");
     let mut runtime = Runtime::new()?;
 
-    let input: Box<dyn AsyncRead + Send> = match conf.input {
-        None => Box::new(stdin()),
-        Some(filename) => {
-            let file_future =  File::open(filename);
-            let byte_stream = runtime.block_on(file_future).expect("Can't open input file.");
-            Box::new(byte_stream)
-        }
-    };
-
-    let output: Box<dyn AsyncWrite + Send> = match conf.output {
-        None => Box::new(stdout()),
-        Some(filename) => {
-
-            let file_future = OpenOptions::new().write(true).create(true).open(filename);
-            let byte_stream = runtime.block_on(file_future).expect("Can't open output file.");
-            Box::new(byte_stream)
-        }
-    };
+    let (input, output) = open_io_async(&conf);
 
     let input_stream = FramedRead::new(input, BytesCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
@@ -64,12 +45,11 @@ fn main() -> StdResult<()> {
         let mut frequency_vec = Vec::from_iter(frequency);
         frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
         stream::iter_ok(frequency_vec)
-    }).and_then(| word_freq_stream| {
-        word_freq_stream.map(|(word_raw, count)| {
-            let word = ::std::str::from_utf8(&word_raw).expect("UTF8 encoding error");
-            Bytes::from(format!("{} {}\n", word, count))
-        }).forward(output_stream)
-    });
+    }).flatten_stream()
+    .map(|(word_raw, count)| {
+        let word = ::std::str::from_utf8(&word_raw).expect("UTF8 encoding error");
+        Bytes::from(format!("{} {}\n", word, count))
+    }).forward(output_stream);
 
     let (_, _output_stream) = runtime.block_on(dbg_future)?;
     runtime.shutdown_on_idle();
