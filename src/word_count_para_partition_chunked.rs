@@ -7,7 +7,6 @@
 
 use std::io;
 use std::fmt::Write;
-use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use futures::stream;
@@ -16,7 +15,7 @@ use futures::{Stream};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
-use bytes::{BytesMut, BufMut};
+use bytes::{Bytes, BytesMut, BufMut};
 
 use word_count::util::*;
 
@@ -51,19 +50,18 @@ fn reduce_task<InItem, OutItem, FBuildPipeline, OutFuture, E>(src: Receiver<InIt
 }
 
 #[inline(never)]
-fn task_fn(stream: Receiver<Vec<BytesMut>>) -> impl Future<Item=HashMap<Vec<u8>, u64>, Error=io::Error>{
-    let frequency: HashMap<Vec<u8>, u64> = HashMap::new();
+fn task_fn(stream: Receiver<Vec<Bytes>>) -> impl Future<Item=FreqTable, Error=io::Error>{
     let table_future = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(frequency,
+        .fold(FreqTable::new(),
         |mut frequency, chunk|
             {
                 for word in chunk {
                     if !word.is_empty() {
-                    *frequency.entry(word.to_vec()).or_insert(0) += 1;
+                    *frequency.entry(word).or_insert(0) += 1;
                     }
                 }
-                future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
+                future::ok::<FreqTable, io::Error>(frequency)
             });
     table_future
 }
@@ -84,9 +82,9 @@ fn main() -> io::Result<()> {
         //let mut join = Join::new(|(_word, count)| { *count});
 
         let pipe_theards = max(1,  conf.threads -1); // discount I/O Thread
-        let (out_tx, out_rx) = channel::<HashMap<Vec<u8>, u64>>(pipe_theards);
+        let (out_tx, out_rx) = channel::<FreqTable>(pipe_theards);
         for _i in 0 .. pipe_theards {
-            let (in_tx, in_rx) = channel::<Vec<BytesMut>>(BUFFER_SIZE);
+            let (in_tx, in_rx) = channel::<Vec<Bytes>>(BUFFER_SIZE);
 
             senders.push(in_tx);
             let pipe = reduce_task(in_rx, out_tx.clone(), task_fn);
@@ -110,11 +108,11 @@ fn main() -> io::Result<()> {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
 
     let file_writer = sub_table_stream
-        .fold(HashMap::<Vec<u8>, u64>::new(), |mut frequency, mut sub_table| {
+        .fold(FreqTable::new(), |mut frequency, mut sub_table| {
                   for (word, count)  in sub_table.drain() {
                       *frequency.entry(word).or_insert(0) += count;
                   }
-                future::ok::<HashMap<Vec<u8>, u64>, io::Error>(frequency)
+                future::ok::<FreqTable, io::Error>(frequency)
               })
         .map(|mut frequency| {
                 let mut frequency_vec = Vec::from_iter(frequency.drain());

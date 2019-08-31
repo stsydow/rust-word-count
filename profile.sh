@@ -7,8 +7,8 @@ GProf2dot="./gprof2dot.py -f perf  --show-samples  --color-nodes-by-selftime"
 PERF="perf record --call-graph lbr"
 cargo build --release
 #rustup run nightly perf record --call-graph lbr cargo wc-parallel
-#$PERF target/release/wc-seq $TEXT > /dev/null
-#perf script | c++filt | $GProf2dot  | dot -Tsvg -o seq-output.svg
+$PERF target/release/wc-seq $TEXT > /dev/null
+perf script | c++filt | $GProf2dot  | dot -Tsvg -o seq-output.svg
 
 #$PERF target/release/wc-parallel-chunked -t4 $TEXT > /dev/null
 #perf script | c++filt | $GProf2dot | dot -Tsvg -o pipe-chunked-output.svg

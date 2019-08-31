@@ -6,7 +6,6 @@
 
 use std::io;
 use std::fmt::Write;
-use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use tokio::prelude::*;
@@ -36,23 +35,7 @@ fn pipeline_task<InItem, OutItem, FBuildPipeline, OutStream, E>(src: Receiver<In
 }
 
 #[inline(never)]
-fn tokenize(frequency: &mut HashMap<Vec<u8>, u32>, text: BytesMut)
-{
-    let mut i_start: usize = 0;
-    for i in 0 .. text.len() {
-        if text[i].is_ascii_whitespace() {
-            let word = &text[i_start .. i];
-            // TODO maybe use BytesMut to avoid copying
-            if !word.is_empty() {
-                *frequency.entry(word.to_vec()).or_insert(0) += 1;
-            }
-            i_start = i + 1;
-        }
-    }
-}
-
-#[inline(never)]
-fn write_out(chunk: Vec<(Vec<u8>, u32)>) -> Bytes{
+fn write_out(chunk: Vec<(Bytes, u64)>) -> Bytes{
     let mut buffer = BytesMut::with_capacity(chunk.len() * 20);
     for (word_raw, count) in chunk {
 
@@ -93,7 +76,7 @@ fn main() -> io::Result<()> {
     let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    let (in_tx, in_rx) = channel::<BytesMut>(4);
+    let (in_tx, in_rx) = channel::<Bytes>(4);
 
     let file_reader = input_stream
         .forward(in_tx
@@ -102,19 +85,17 @@ fn main() -> io::Result<()> {
         .map_err(|e| { eprintln!("error: {}", e); panic!()});
     runtime.spawn(file_reader);
 
-    let frequency: HashMap<Vec<u8>, u32> = HashMap::new();
-
-    let (out_tx, out_rx) = channel::<Vec<(Vec<u8>, u32)>>(1024);
+    let (out_tx, out_rx) = channel::<Vec<(Bytes, u64)>>(1024);
 
     let processor = pipeline_task(in_rx, out_tx, |stream| {
         let table_future = stream
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-            .fold(frequency,
+            .fold(FreqTable::new(),
                   |mut frequency, text|
                   {
-                      tokenize(&mut frequency, text);
+                      count_bytes(&mut frequency, text);
 
-                      future::ok::<HashMap<Vec<u8>, u32>, io::Error>(frequency)
+                      future::ok::<FreqTable, io::Error>(frequency)
                   }
             );
 

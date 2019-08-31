@@ -6,59 +6,14 @@
 
 use std::io::Result as StdResult;
 use std::io;
-use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
-use bytes::{Bytes, BytesMut};
+use bytes::{Bytes};
 use word_count::util::*;
 
-
-#[inline(never)]
-fn tokenize(frequency: &mut HashMap<Vec<u8>, u32>, text: &[u8])
-{
-    let mut i_start: usize = 0;
-    for i in 0 .. text.len() {
-        if text[i].is_ascii_whitespace() {
-            let word = &text[i_start .. i];
-            if !word.is_empty() {
-                *frequency.entry(word.to_vec()).or_insert(0) += 1;
-            }
-            i_start = i + 1;
-        }
-    }
-}
-
-/*
-//slower than copying to Vec<u8>
-#[inline(never)]
-fn tokenize_consume(frequency: &mut HashMap<BytesMut, u32>, mut text: BytesMut)
-{
-    loop {
-        let mut white_space_idx = text.len();
-        for i in 0 .. text.len() {
-            if text[i].is_ascii_whitespace() {
-                white_space_idx = i;
-                break;
-            }
-        }
-
-        if white_space_idx < text.len(){
-
-            let mut word = text.split_to(white_space_idx + 1);
-            let _space = word.split_off(word.len() -1);
-
-            if !word.is_empty() {
-                *frequency.entry(word).or_insert(0) += 1;
-            }
-        } else {
-            break;
-        }
-    }
-}
-*/
 
 fn main() -> StdResult<()> {
 
@@ -70,15 +25,13 @@ fn main() -> StdResult<()> {
     let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    let frequency: HashMap<Vec<u8>, u32> = HashMap::new();
-
     let dbg_future = input_stream
-    .fold(frequency,
+    .fold(FreqTable::new(),
           |mut frequency, text|
           {
-              tokenize(&mut frequency, &text);
+              count_bytes(&mut frequency, text);
 
-              future::ok::<HashMap<Vec<u8>, u32>, io::Error>(frequency)
+              future::ok::<FreqTable, io::Error>(frequency)
           }
     ).map(|frequency| {
         let mut frequency_vec = Vec::from_iter(frequency);

@@ -8,7 +8,7 @@ use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
 
 use tokio::codec::{Decoder};
-use bytes::{BytesMut};
+use bytes::{Bytes, BytesMut};
 
 pub struct RawWordCodec {}
 
@@ -81,13 +81,13 @@ impl WordVecCodec {
 const APPROX_WORD_LEN:usize = 8;
 
 impl Decoder for WordVecCodec {
-    type Item = Vec<BytesMut>;
+    type Item = Vec<Bytes>;
     // TODO: in the next breaking change, this should be changed to a custom
     // error type that indicates the "max length exceeded" condition better.
     type Error = io::Error;
 
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<BytesMut>>, io::Error> {
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<Bytes>>, io::Error> {
 
         if buf.len() >= 1_000_000 {
             return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
@@ -98,7 +98,7 @@ impl Decoder for WordVecCodec {
             .rposition(|b| b.is_ascii_whitespace());
 
         let some_words = if let Some(last_space_idx) = last_space {
-            let mut complete_words = buf.split_to(last_space_idx + 1);
+            let mut complete_words = buf.split_to(last_space_idx + 1).freeze();
             let mut words = Vec::with_capacity(complete_words.len()/APPROX_WORD_LEN);
             loop {
                 let mut white_space_idx = complete_words.len();
@@ -127,7 +127,7 @@ impl Decoder for WordVecCodec {
         return Ok(some_words);
     }
 
-    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<BytesMut>>, io::Error> {
+    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<Bytes>>, io::Error> {
         Ok(match self.decode(buf)? {
             Some(frame) => Some(frame),
             None => {
@@ -136,7 +136,7 @@ impl Decoder for WordVecCodec {
                     None
                 } else {
                     let mut word = Vec::with_capacity(1);
-                    word.push(buf.take());
+                    word.push(buf.take().freeze());
                     Some(word)
                 }
             }
@@ -153,12 +153,12 @@ impl WholeWordsCodec {
 }
 
 impl Decoder for WholeWordsCodec {
-    type Item = BytesMut;
+    type Item = Bytes;
     // TODO: in the next breaking change, this should be changed to a custom
     // error type that indicates the "max length exceeded" condition better.
     type Error = io::Error;
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, io::Error> {
+    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Bytes>, io::Error> {
 
         if buf.len() >= 1_000_000 {
             return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
@@ -170,7 +170,7 @@ impl Decoder for WholeWordsCodec {
 
         let some_words = if let Some(last_space_idx) = last_space {
             let complete_words = buf.split_to(last_space_idx + 1);
-            Some(complete_words)
+            Some(complete_words.freeze())
         } else {
             None
         };
@@ -178,7 +178,7 @@ impl Decoder for WholeWordsCodec {
         return Ok(some_words);
     }
 
-    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, io::Error> {
+    fn decode_eof(&mut self, buf: &mut BytesMut) -> Result<Option<Bytes>, io::Error> {
         Ok(match self.decode(buf)? {
             Some(frame) => Some(frame),
             None => {
@@ -186,7 +186,7 @@ impl Decoder for WholeWordsCodec {
                 if buf.is_empty() {
                     None
                 } else {
-                    let word = buf.take();
+                    let word = buf.take().freeze();
                     Some(word)
                 }
             }
@@ -255,6 +255,23 @@ pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn Async
     };
 
     (input, output)
+}
+
+pub type FreqTable = HashMap<Bytes, u64>;
+
+#[inline(never)]
+pub fn count_bytes(frequency: &mut FreqTable, text: Bytes)
+{
+    let mut i_start: usize = 0;
+    for i in 0 .. text.len() {
+        if text[i].is_ascii_whitespace() {
+            let word = text.slice(i_start, i);
+            if !word.is_empty() {
+                *frequency.entry(word).or_insert(0) += 1;
+            }
+            i_start = i + 1;
+        }
+    }
 }
 
 pub fn utf8(buf: &[u8]) -> Result<&str, io::Error> {
