@@ -29,7 +29,7 @@ fn main() -> StdResult<()> {
     .fold(FreqTable::new(),
           |mut frequency, text|
           {
-              count_bytes(&mut frequency, text);
+              count_bytes(&mut frequency, &text);
 
               future::ok::<FreqTable, io::Error>(frequency)
           }

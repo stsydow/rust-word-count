@@ -10,6 +10,12 @@ cargo build --release
 $PERF target/release/wc-seq $TEXT > /dev/null
 perf script | c++filt | $GProf2dot  | dot -Tsvg -o seq-output.svg
 
+$PERF target/release/wc-seq-buf $TEXT > /dev/null
+perf script | c++filt | $GProf2dot  | dot -Tsvg -o seq-buf-output.svg
+
+$PERF target/release/wc-async-buf $TEXT > /dev/null
+perf script | c++filt | $GProf2dot  | dot -Tsvg -o async-buf-output.svg
+
 #$PERF target/release/wc-parallel-chunked -t4 $TEXT > /dev/null
 #perf script | c++filt | $GProf2dot | dot -Tsvg -o pipe-chunked-output.svg
 

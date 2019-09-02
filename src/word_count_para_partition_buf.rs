@@ -59,7 +59,7 @@ fn task_fn(stream: Receiver<Bytes>) -> impl Future<Item=FreqTable, Error=io::Err
         .fold(FreqTable::new(),
               |mut frequency, text|
               {
-                  count_bytes(&mut frequency, text);
+                  count_bytes(&mut frequency, &text);
 
                   future::ok::<FreqTable, io::Error>(frequency)
               });
@@ -117,7 +117,8 @@ fn main() -> io::Result<()> {
         .map(|mut frequency| {
                 let mut frequency_vec = Vec::from_iter(frequency.drain());
                 frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-                stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
+                stream::iter_ok(frequency_vec)
+                    .chunks(CHUNKS_CAPACITY) // <- TODO performance?
             })
         .flatten_stream()
         .map(|chunk| {

@@ -260,7 +260,7 @@ pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn Async
 pub type FreqTable = HashMap<Bytes, u64>;
 
 #[inline(never)]
-pub fn count_bytes(frequency: &mut FreqTable, text: Bytes)
+pub fn count_bytes(frequency: &mut FreqTable, text: &Bytes) -> usize
 {
     let mut i_start: usize = 0;
     for i in 0 .. text.len() {
@@ -272,6 +272,8 @@ pub fn count_bytes(frequency: &mut FreqTable, text: Bytes)
             i_start = i + 1;
         }
     }
+
+    i_start
 }
 
 pub fn utf8(buf: &[u8]) -> Result<&str, io::Error> {

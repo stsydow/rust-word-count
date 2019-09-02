@@ -9,6 +9,10 @@ name = "wc-seq"
 path = "src/word_count_seq.rs"
 
 [[bin]]
+name = "wc-seq-buf"
+path = "src/word_count_seq_buf.rs"
+
+[[bin]]
 name = "wc-async"
 path = "src/word_count_async.rs"
 

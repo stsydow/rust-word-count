@@ -93,7 +93,7 @@ fn main() -> io::Result<()> {
             .fold(FreqTable::new(),
                   |mut frequency, text|
                   {
-                      count_bytes(&mut frequency, text);
+                      count_bytes(&mut frequency, &text);
 
                       future::ok::<FreqTable, io::Error>(frequency)
                   }
@@ -104,7 +104,8 @@ fn main() -> io::Result<()> {
                 let mut frequency_vec = Vec::from_iter(frequency);
                 frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
                 stream::iter_ok(frequency_vec)
-            }).flatten_stream().chunks(CHUNKS_CAPACITY)
+                    .chunks(CHUNKS_CAPACITY)
+            }).flatten_stream()
     });
 
     runtime.spawn(processor);
