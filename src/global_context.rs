@@ -1,38 +1,44 @@
-use futures::{Poll, Stream, Async, try_ready};
+use futures::{try_ready, Async, Poll, Stream};
 
 pub struct GlobalContext<Ctx, InStream, F> {
-    context:Ctx,
-    input:InStream,
-    work: F
+    context: Ctx,
+    input: InStream,
+    work: F,
 }
 
 impl<E, R, Ctx, InStream, FWork> GlobalContext<Ctx, InStream, FWork>
-    where InStream:Stream<Item=E>,
-          FWork:Fn(&mut Ctx, &E) -> R
+where
+    InStream: Stream<Item = E>,
+    FWork: Fn(&mut Ctx, &E) -> R,
 {
-    pub fn new<F>(input:InStream, ctx_builder: F, work: FWork) -> Self
-        where F: Fn() -> Ctx
+    pub fn new<F>(input: InStream, ctx_builder: F, work: FWork) -> Self
+    where
+        F: Fn() -> Ctx,
     {
         GlobalContext {
             context: ctx_builder(),
             input,
-            work
+            work,
         }
     }
 }
 
-pub fn global_context<Event, R, Ctx, InStream, CtxInit, FWork> (input:InStream, ctx_builder: CtxInit, work: FWork) -> GlobalContext<Ctx, InStream, FWork>
-    where InStream:Stream<Item=Event>,
-          CtxInit:Fn() -> Ctx,
-          FWork:Fn(&mut Ctx, &Event) -> R
+pub fn global_context<Event, R, Ctx, InStream, CtxInit, FWork>(
+    input: InStream,
+    ctx_builder: CtxInit,
+    work: FWork,
+) -> GlobalContext<Ctx, InStream, FWork>
+where
+    InStream: Stream<Item = Event>,
+    CtxInit: Fn() -> Ctx,
+    FWork: Fn(&mut Ctx, &Event) -> R,
 {
     GlobalContext {
         context: ctx_builder(),
         input,
-        work
+        work,
     }
 }
-
 
 /*
 pub fn stream_context<E, R, InStream, Ctx> (input:InStream, initial_ctx: Ctx) -> GlobalContext<Ctx, InStream>
@@ -43,8 +49,10 @@ pub fn stream_context<E, R, InStream, Ctx> (input:InStream, initial_ctx: Ctx) ->
 }
 */
 
-impl<Event, Error, R, Ctx, InStream: Stream<Item=Event, Error=Error>, FWork>  Stream for GlobalContext<Ctx, InStream, FWork>
-    where FWork:Fn(&mut Ctx, &Event) -> R
+impl<Event, Error, R, Ctx, InStream: Stream<Item = Event, Error = Error>, FWork> Stream
+    for GlobalContext<Ctx, InStream, FWork>
+where
+    FWork: Fn(&mut Ctx, &Event) -> R,
 {
     type Item = R;
     type Error = Error;
@@ -55,8 +63,8 @@ impl<Event, Error, R, Ctx, InStream: Stream<Item=Event, Error=Error>, FWork>  St
             Some(event) => {
                 let result = (self.work)(&mut self.context, &event);
                 Some(result)
-            },
-            None => None
+            }
+            None => None,
         };
 
         Ok(Async::Ready(result))

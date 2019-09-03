@@ -4,16 +4,15 @@
 // tar xzf llvm-8.0.0.src.tar.xz
 // find llvm-8.0.0.src -type f | xargs cat | tr -sc 'a-zA-Z0-9_' '\n' | perl -ne 'print unless length($_) > 1000;' | ./lines > words.txt
 
-use std::io::{self, Read};
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::fs::File;
+use std::io::{self, Read};
+use std::iter::FromIterator;
 
 use word_count::util::*;
 
 #[inline(never)]
-fn read_file() -> io::Result<String>
-{
+fn read_file() -> io::Result<String> {
     let conf = parse_args("word count simple");
 
     let mut buffer = String::new();
@@ -30,7 +29,7 @@ fn read_file() -> io::Result<String>
 fn tokenize<'a>(buffer: &'a String) -> HashMap<&'a str, u32> {
     // Primitive Tokenize
     let mut frequency: HashMap<&'a str, u32> = HashMap::new();
-    for word in buffer.split_ascii_whitespace(){
+    for word in buffer.split_ascii_whitespace() {
         *frequency.entry(word).or_insert(0) += 1;
     }
 
@@ -38,12 +37,12 @@ fn tokenize<'a>(buffer: &'a String) -> HashMap<&'a str, u32> {
 }
 
 #[inline(never)]
-fn write_out(frequency: &Vec<(&str, u32)>) -> io::Result<()>{
+fn write_out(frequency: &Vec<(&str, u32)>) -> io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
     // Push to stdout
-    for (word, count) in frequency{
+    for (word, count) in frequency {
         // Could also do println!("{} {}", word count) here,
         // but this is faster
         let out = &*format!("{} {}\n", word, count);
@@ -53,7 +52,6 @@ fn write_out(frequency: &Vec<(&str, u32)>) -> io::Result<()>{
 }
 
 fn main() -> io::Result<()> {
-
     let buffer = read_file()?;
 
     let frequency = tokenize(&buffer);

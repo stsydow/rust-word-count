@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Map, Operator, Inspect, Probe};
 use timely::dataflow::channels::pact::Exchange;
+use timely::dataflow::operators::{Inspect, Map, Operator, Probe};
+use timely::dataflow::{InputHandle, ProbeHandle};
 
 use std::io::{self, Read};
 
@@ -11,8 +11,7 @@ use std::hash::Hash;
 
 use word_count::util::*;
 
-
-fn hash_str(text :&str) -> u64 {
+fn hash_str(text: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
 
@@ -24,32 +23,30 @@ fn hash_str(text :&str) -> u64 {
 fn main() {
     // initializes and runs a timely dataflow.
     timely::execute(timely::Configuration::Process(4), |worker| {
-
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
-
-
 
         // define a distribution function for strings.
         //let exchange = Exchange::new(|x: &(String, i64)| hash_str(&x.0));
         let exchange = Exchange::new(|x: &(String, i64)| x.0.len() as u64);
 
         // create a new input, exchange data, and inspect its output
-        worker.dataflow::<usize,_,_>(|scope| {
-            input.to_stream(scope)
-                .flat_map(|(text, diff): (String, i64)|
+        worker.dataflow::<usize, _, _>(|scope| {
+            input
+                .to_stream(scope)
+                .flat_map(|(text, diff): (String, i64)| {
                     text.split_whitespace()
                         .map(move |word| (word.to_owned(), diff))
                         .collect::<Vec<_>>()
-                )
+                })
                 .unary_frontier(exchange, "WordCount", |_capability, _info| {
-
                     let mut queues = HashMap::new();
                     let mut counts = HashMap::new();
 
                     move |input, output| {
                         while let Some((time, data)) = input.next() {
-                            queues.entry(time.retain())
+                            queues
+                                .entry(time.retain())
                                 .or_insert(Vec::new())
                                 .push(data.replace(Vec::new()));
                         }
@@ -68,8 +65,13 @@ fn main() {
                         }
 
                         queues.retain(|_key, val| !val.is_empty());
-                    }})
-                .inspect_time(|time, x| if time % 1000 == 0 { println!("{}k: {:?}", time/1000, x)})
+                    }
+                })
+                .inspect_time(|time, x| {
+                    if time % 1000 == 0 {
+                        println!("{}k: {:?}", time / 1000, x)
+                    }
+                })
                 .probe_with(&mut probe);
         });
 
@@ -77,10 +79,14 @@ fn main() {
             let conf = parse_args("word count dataflow");
             let mut buffer = String::new();
             if let Some(filename) = conf.input {
-                File::open(&filename).expect(format!("can't open file \"{}\"", &filename).as_str())
-                    .read_to_string(&mut buffer).expect(format!("can't read file \"{}\"", &filename).as_str());
+                File::open(&filename)
+                    .expect(format!("can't open file \"{}\"", &filename).as_str())
+                    .read_to_string(&mut buffer)
+                    .expect(format!("can't read file \"{}\"", &filename).as_str());
             } else {
-                io::stdin().read_to_string(&mut buffer).expect("can't read stdin");
+                io::stdin()
+                    .read_to_string(&mut buffer)
+                    .expect("can't read stdin");
             }
 
             let mut round: usize = 0;
@@ -104,5 +110,6 @@ fn main() {
             }
         }
         */
-    }).unwrap();
+    })
+    .unwrap();
 }

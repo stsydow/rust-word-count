@@ -1,15 +1,12 @@
-use futures::{Poll, Sink, Async, try_ready, StartSend};
+use futures::{try_ready, Async, Poll, Sink, StartSend};
 
-pub struct ForkRR<S:Sink>
-{
-    pipelines:Vec<Option<S>>,
-    cursor:usize
+pub struct ForkRR<S: Sink> {
+    pipelines: Vec<Option<S>>,
+    cursor: usize,
 }
 
-impl<S:Sink> ForkRR<S>
-{
-    pub fn new(sinks: Vec<S>) -> Self
-    {
+impl<S: Sink> ForkRR<S> {
+    pub fn new(sinks: Vec<S>) -> Self {
         let mut pipelines = Vec::with_capacity(sinks.len());
         for s in sinks {
             pipelines.push(Some(s));
@@ -18,13 +15,12 @@ impl<S:Sink> ForkRR<S>
 
         ForkRR {
             pipelines,
-            cursor: 0
+            cursor: 0,
         }
     }
 }
 
-impl<S: Sink> Sink for ForkRR<S>
-{
+impl<S: Sink> Sink for ForkRR<S> {
     type SinkItem = S::SinkItem;
     type SinkError = S::SinkError;
 
@@ -37,10 +33,8 @@ impl<S: Sink> Sink for ForkRR<S>
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-
         for iter_sink in self.pipelines.iter_mut() {
-            if let Some(sink) = iter_sink
-            {
+            if let Some(sink) = iter_sink {
                 try_ready!(sink.poll_complete());
             }
         }
@@ -49,10 +43,8 @@ impl<S: Sink> Sink for ForkRR<S>
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
-
-        for i in 0 .. self.pipelines.len() {
-            if let Some(sink) =  &mut self.pipelines[i]
-            {
+        for i in 0..self.pipelines.len() {
+            if let Some(sink) = &mut self.pipelines[i] {
                 try_ready!(sink.close());
                 self.pipelines[i] = None;
             }
@@ -62,17 +54,16 @@ impl<S: Sink> Sink for ForkRR<S>
     }
 }
 
-pub struct Fork<S:Sink, FSel>
-{
+pub struct Fork<S: Sink, FSel> {
     selector: FSel,
-    pipelines:Vec<Option<S>>
+    pipelines: Vec<Option<S>>,
 }
 
-impl<S:Sink, FSel> Fork<S, FSel>
-where FSel: Fn(&S::SinkItem) -> usize
+impl<S: Sink, FSel> Fork<S, FSel>
+where
+    FSel: Fn(&S::SinkItem) -> usize,
 {
-    pub fn new(selector: FSel, sinks: Vec<S>) -> Self
-    {
+    pub fn new(selector: FSel, sinks: Vec<S>) -> Self {
         let mut pipelines = Vec::with_capacity(sinks.len());
         for s in sinks {
             pipelines.push(Some(s));
@@ -81,7 +72,7 @@ where FSel: Fn(&S::SinkItem) -> usize
 
         Fork {
             selector,
-            pipelines
+            pipelines,
         }
     }
 
@@ -94,7 +85,7 @@ where FSel: Fn(&S::SinkItem) -> usize
 
 impl<S: Sink, FSel> Sink for Fork<S, FSel>
 where
-    FSel: Fn(&S::SinkItem) -> usize
+    FSel: Fn(&S::SinkItem) -> usize,
 {
     type SinkItem = S::SinkItem;
     type SinkError = S::SinkError;
@@ -109,10 +100,8 @@ where
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-
         for iter_sink in self.pipelines.iter_mut() {
-            if let Some(sink) = iter_sink
-            {
+            if let Some(sink) = iter_sink {
                 try_ready!(sink.poll_complete());
             }
         }
@@ -121,10 +110,8 @@ where
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
-
-        for i in 0 .. self.pipelines.len() {
-            if let Some(sink) =  &mut self.pipelines[i]
-            {
+        for i in 0..self.pipelines.len() {
+            if let Some(sink) = &mut self.pipelines[i] {
                 try_ready!(sink.close());
                 self.pipelines[i] = None;
             }

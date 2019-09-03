@@ -1,9 +1,9 @@
-use std::io;
-use std::io::prelude::*;
 use std::error::Error;
 use std::fmt;
-use std::process::exit;
 use std::fs::OpenOptions;
+use std::io;
+use std::io::prelude::*;
+use std::process::exit;
 
 use log::{LevelFilter, SetLoggerError};
 use simplelog::TerminalMode;
@@ -30,7 +30,7 @@ impl Error for LoggingError {
         match *self {
             LoggingError::Io(ref err) => err.description(),
             LoggingError::Init(ref err) => err.description(),
-            LoggingError::TerminalError  => "missing terminal error",
+            LoggingError::TerminalError => "missing terminal error",
         }
     }
 
@@ -55,42 +55,39 @@ impl From<io::Error> for LoggingError {
     }
 }
 
-pub fn set_logger(log_stream : &str, log_level : LevelFilter) -> Result<(), LoggingError>{
-
-
+pub fn set_logger(log_stream: &str, log_level: LevelFilter) -> Result<(), LoggingError> {
     let log_conf = simplelog::Config::default();
 
-    let logger : Box<dyn simplelog::SharedLogger> = if log_stream == "-" {
+    let logger: Box<dyn simplelog::SharedLogger> = if log_stream == "-" {
         match simplelog::TermLogger::new(log_level, log_conf, TerminalMode::Stderr) {
             Some(logger) => Ok(logger),
-            None => {
-                Err(LoggingError::TerminalError)
-            }
-        } ?
-
-    }else{
+            None => Err(LoggingError::TerminalError),
+        }?
+    } else {
         let file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(log_stream) ?;
+            .open(log_stream)?;
         simplelog::WriteLogger::new(log_level, log_conf, file)
     };
 
-    simplelog::CombinedLogger::init( vec![logger]) ?;
+    simplelog::CombinedLogger::init(vec![logger])?;
 
     Ok(())
 }
 
-pub fn set_logger_or_exit(log_stream : &str, log_level : LevelFilter)
-{
-        let res =  set_logger(&log_stream, log_level);
-        if res.is_err() {
-            let err = res.unwrap_err();
-            let stderr = io::stderr();
-            let _ = writeln!(stderr.lock(), "can't start logging to \"{}\": {}",
-                             log_stream, err.description());
-            exit(-1);
-        }
+pub fn set_logger_or_exit(log_stream: &str, log_level: LevelFilter) {
+    let res = set_logger(&log_stream, log_level);
+    if res.is_err() {
+        let err = res.unwrap_err();
+        let stderr = io::stderr();
+        let _ = writeln!(
+            stderr.lock(),
+            "can't start logging to \"{}\": {}",
+            log_stream,
+            err.description()
+        );
+        exit(-1);
+    }
 }
-

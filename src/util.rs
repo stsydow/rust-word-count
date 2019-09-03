@@ -1,20 +1,20 @@
-use argparse::{ArgumentParser, Print, StoreOption, Store};
-use std::{io, str, usize};
+use argparse::{ArgumentParser, Print, Store, StoreOption};
 use std::collections::HashMap;
+use std::{io, str, usize};
 
-use tokio::prelude::*;
-use tokio::runtime::Runtime;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
+use tokio::prelude::*;
+use tokio::runtime::Runtime;
 
-use tokio::codec::{Decoder};
 use bytes::{Bytes, BytesMut};
+use tokio::codec::Decoder;
 
 pub struct RawWordCodec {}
 
 impl RawWordCodec {
     pub fn new() -> Self {
-        RawWordCodec{}
+        RawWordCodec {}
     }
 }
 
@@ -25,12 +25,14 @@ impl Decoder for RawWordCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<BytesMut>, io::Error> {
-
         if buf.len() >= 1_000_000 {
-            return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("max word length exceeded {:#?}B", buf.len()),
+            ));
         }
 
-        let word_offset = buf//[self.last_cursor..] // TODO use last cursor
+        let word_offset = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
             .position(|b| b.is_ascii_whitespace());
 
@@ -45,7 +47,7 @@ impl Decoder for RawWordCodec {
 
             Some(word.to_string())
             */
-            let _space = word.split_off(word.len() -1);
+            let _space = word.split_off(word.len() - 1);
             Some(word)
         } else {
             None
@@ -74,11 +76,11 @@ pub struct WordVecCodec {}
 
 impl WordVecCodec {
     pub fn new() -> Self {
-        WordVecCodec{}
+        WordVecCodec {}
     }
 }
 
-const APPROX_WORD_LEN:usize = 8;
+const APPROX_WORD_LEN: usize = 8;
 
 impl Decoder for WordVecCodec {
     type Item = Vec<Bytes>;
@@ -86,34 +88,34 @@ impl Decoder for WordVecCodec {
     // error type that indicates the "max length exceeded" condition better.
     type Error = io::Error;
 
-
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Vec<Bytes>>, io::Error> {
-
         if buf.len() >= 1_000_000 {
-            return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("max word length exceeded {:#?}B", buf.len()),
+            ));
         }
 
-        let last_space = buf//[self.last_cursor..] // TODO use last cursor
+        let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
             .rposition(|b| b.is_ascii_whitespace());
 
         let some_words = if let Some(last_space_idx) = last_space {
             let mut complete_words = buf.split_to(last_space_idx + 1).freeze();
-            let mut words = Vec::with_capacity(complete_words.len()/APPROX_WORD_LEN);
+            let mut words = Vec::with_capacity(complete_words.len() / APPROX_WORD_LEN);
             loop {
                 let mut white_space_idx = complete_words.len();
-                for i in 0 .. complete_words.len() {
+                for i in 0..complete_words.len() {
                     if complete_words[i].is_ascii_whitespace() {
                         white_space_idx = i;
                         break;
                     }
                 }
 
-                if white_space_idx < complete_words.len(){
-
-                        let mut word = complete_words.split_to(white_space_idx + 1);
-                        let _space = word.split_off(word.len() -1);
-                        words.push(word);
+                if white_space_idx < complete_words.len() {
+                    let mut word = complete_words.split_to(white_space_idx + 1);
+                    let _space = word.split_off(word.len() - 1);
+                    words.push(word);
                 } else {
                     break;
                 }
@@ -148,7 +150,7 @@ pub struct WholeWordsCodec {}
 
 impl WholeWordsCodec {
     pub fn new() -> Self {
-        WholeWordsCodec{}
+        WholeWordsCodec {}
     }
 }
 
@@ -159,12 +161,14 @@ impl Decoder for WholeWordsCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Bytes>, io::Error> {
-
         if buf.len() >= 1_000_000 {
-            return Err(io::Error::new(io::ErrorKind::Other, format!("max word length exceeded {:#?}B", buf.len())));
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("max word length exceeded {:#?}B", buf.len()),
+            ));
         }
 
-        let last_space = buf//[self.last_cursor..] // TODO use last cursor
+        let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
             .rposition(|b| b.is_ascii_whitespace());
 
@@ -200,30 +204,38 @@ pub struct Config {
     pub threads: usize,
 }
 
-pub fn parse_args(description: &str)  -> Config {
-    let mut conf : Config = Config {
+pub fn parse_args(description: &str) -> Config {
+    let mut conf: Config = Config {
         output: None,
         input: None,
         threads: 1,
     };
 
-    {  // this block limits scope of borrows by ap.refer() method
+    {
+        // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
 
         ap.set_description(description);
-        ap.add_option(&["-V", "--version"],
-                      Print(env!("CARGO_PKG_VERSION").to_string()), "Show version");
+        ap.add_option(
+            &["-V", "--version"],
+            Print(env!("CARGO_PKG_VERSION").to_string()),
+            "Show version",
+        );
 
-
-        ap.refer(&mut conf.input).add_argument(
-            "input", StoreOption, "input file - default: stdin");
+        ap.refer(&mut conf.input)
+            .add_argument("input", StoreOption, "input file - default: stdin");
 
         ap.refer(&mut conf.output).add_argument(
-            "output", StoreOption, "output file - default: stdout");
+            "output",
+            StoreOption,
+            "output file - default: stdout",
+        );
 
         ap.refer(&mut conf.threads).add_option(
             &["-t", "--threads"],
-            Store, "thread count - default: 1");
+            Store,
+            "thread count - default: 1",
+        );
 
         ap.parse_args_or_exit();
     }
@@ -232,14 +244,15 @@ pub fn parse_args(description: &str)  -> Config {
 }
 
 #[inline(never)]
-pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn AsyncWrite + Send>)
-{
+pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn AsyncWrite + Send>) {
     let mut runtime = Runtime::new().expect("can't start async runtime");
     let input: Box<dyn AsyncRead + Send> = match &conf.input {
         None => Box::new(stdin()),
         Some(filename) => {
-            let file_future =  File::open(filename.clone());
-            let byte_stream = runtime.block_on(file_future).expect("Can't open input file.");
+            let file_future = File::open(filename.clone());
+            let byte_stream = runtime
+                .block_on(file_future)
+                .expect("Can't open input file.");
             Box::new(byte_stream)
         }
     };
@@ -247,9 +260,13 @@ pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn Async
     let output: Box<dyn AsyncWrite + Send> = match &conf.output {
         None => Box::new(stdout()),
         Some(filename) => {
-
-            let file_future = OpenOptions::new().write(true).create(true).open(filename.clone());
-            let byte_stream = runtime.block_on(file_future).expect("Can't open output file.");
+            let file_future = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open(filename.clone());
+            let byte_stream = runtime
+                .block_on(file_future)
+                .expect("Can't open output file.");
             Box::new(byte_stream)
         }
     };
@@ -260,10 +277,9 @@ pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn Async
 pub type FreqTable = HashMap<Bytes, u64>;
 
 #[inline(never)]
-pub fn count_bytes(frequency: &mut FreqTable, text: &Bytes) -> usize
-{
+pub fn count_bytes(frequency: &mut FreqTable, text: &Bytes) -> usize {
     let mut i_start: usize = 0;
-    for i in 0 .. text.len() {
+    for i in 0..text.len() {
         if text[i].is_ascii_whitespace() {
             let word = text.slice(i_start, i);
             if !word.is_empty() {
@@ -277,15 +293,13 @@ pub fn count_bytes(frequency: &mut FreqTable, text: &Bytes) -> usize
 }
 
 pub fn utf8(buf: &[u8]) -> Result<&str, io::Error> {
-    str::from_utf8(buf).map_err(|_|
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Unable to decode input as UTF8"))
+    str::from_utf8(buf)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Unable to decode input as UTF8"))
 }
 
-
-pub fn count_word<T>(frequency: &mut HashMap<Vec<T>, u32>, word:&[T])
-    where T : std::hash::Hash + std::cmp::Eq + std::clone::Clone
+pub fn count_word<T>(frequency: &mut HashMap<Vec<T>, u32>, word: &[T])
+where
+    T: std::hash::Hash + std::cmp::Eq + std::clone::Clone,
 {
     if word.is_empty() {
         return;
@@ -302,12 +316,15 @@ pub fn count_word<T>(frequency: &mut HashMap<Vec<T>, u32>, word:&[T])
     */
 }
 
-pub fn word_count_buf_split(frequency: &mut HashMap<Vec<u8>, u32>, remainder: &mut Vec<u8>, buffer: &[u8])
-{
-    let mut chunks:std::slice::Split<_,_> = buffer.split(|c| c.is_ascii_whitespace());
+pub fn word_count_buf_split(
+    frequency: &mut HashMap<Vec<u8>, u32>,
+    remainder: &mut Vec<u8>,
+    buffer: &[u8],
+) {
+    let mut chunks: std::slice::Split<_, _> = buffer.split(|c| c.is_ascii_whitespace());
     let first_tail = chunks.next().unwrap();
-    remainder.extend_from_slice( first_tail);
-    let first_word =  remainder.clone();
+    remainder.extend_from_slice(first_tail);
+    let first_word = remainder.clone();
     let mut last_word = first_word.as_slice();
     for word in chunks {
         count_word(frequency, last_word);
@@ -318,8 +335,11 @@ pub fn word_count_buf_split(frequency: &mut HashMap<Vec<u8>, u32>, remainder: &m
     remainder.extend_from_slice(last_word);
 }
 
-pub fn word_count_buf_by_foot(frequency: &mut HashMap<Vec<u8>, u32>, remainder: &mut Vec<u8>, buffer: &[u8])
-{
+pub fn word_count_buf_by_foot(
+    frequency: &mut HashMap<Vec<u8>, u32>,
+    remainder: &mut Vec<u8>,
+    buffer: &[u8],
+) {
     let current_word = remainder;
     current_word.reserve(20);
 
@@ -333,14 +353,16 @@ pub fn word_count_buf_by_foot(frequency: &mut HashMap<Vec<u8>, u32>, remainder: 
     }
 }
 
-
-pub fn word_count_buf_indexed(frequency: &mut HashMap<Vec<u8>, u32>, remainder: &mut Vec<u8>, buffer: &[u8])
-{
+pub fn word_count_buf_indexed(
+    frequency: &mut HashMap<Vec<u8>, u32>,
+    remainder: &mut Vec<u8>,
+    buffer: &[u8],
+) {
     let mut i_start: usize = 0;
 
-    for i in 0 .. buffer.len() {
+    for i in 0..buffer.len() {
         if buffer[i].is_ascii_whitespace() {
-            remainder.extend_from_slice(&buffer[i_start .. i]);
+            remainder.extend_from_slice(&buffer[i_start..i]);
             count_word(frequency, remainder.as_ref());
             i_start = i + 1;
             remainder.clear();
@@ -348,11 +370,11 @@ pub fn word_count_buf_indexed(frequency: &mut HashMap<Vec<u8>, u32>, remainder: 
         }
     }
 
-    for i in i_start .. buffer.len() {
+    for i in i_start..buffer.len() {
         if buffer[i].is_ascii_whitespace() {
-            count_word(frequency, &buffer[i_start .. i]);
+            count_word(frequency, &buffer[i_start..i]);
             i_start = i + 1;
         }
     }
-    remainder.extend_from_slice(&buffer[i_start ..]);
+    remainder.extend_from_slice(&buffer[i_start..]);
 }

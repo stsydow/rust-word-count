@@ -4,38 +4,35 @@
 // tar xzf llvm-8.0.0.src.tar.xz
 // find llvm-8.0.0.src -type f | xargs cat | tr -sc 'a-zA-Z0-9_' '\n' | perl -ne 'print unless length($_) > 1000;' | ./lines > words.txt
 
-use std::io::{self, Stdin, BufRead, BufReader};
-use std::iter::FromIterator;
 use std::fs::File;
+use std::io::{self, BufRead, BufReader, Stdin};
+use std::iter::FromIterator;
 
 use bytes::Bytes;
 
 use word_count::util::*;
 
 #[inline(never)]
-fn read_file<'a>(my_stdin: &'a Stdin ) -> io::Result<Box<dyn BufRead + 'a>>
-{
+fn read_file<'a>(my_stdin: &'a Stdin) -> io::Result<Box<dyn BufRead + 'a>> {
     let conf = parse_args("word count simple");
 
     let io_box: Box<dyn BufRead> = match conf.input {
         Some(filename) => {
             let file = File::open(filename)?;
             Box::new(BufReader::new(file))
-        },
-        None => {
-            Box::new(my_stdin.lock())
         }
+        None => Box::new(my_stdin.lock()),
     };
     Ok(io_box)
 }
 
 #[inline(never)]
-fn write_out(frequency: &Vec<(Bytes, u64)>) -> io::Result<()>{
+fn write_out(frequency: &Vec<(Bytes, u64)>) -> io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
     // Push to stdout
-    for (word_raw, count) in frequency{
+    for (word_raw, count) in frequency {
         // Could also do println!("{} {}", word count) here,
         // but this is faster
         let word = utf8(&word_raw).expect("UTF8 encoding error");
@@ -46,7 +43,6 @@ fn write_out(frequency: &Vec<(Bytes, u64)>) -> io::Result<()>{
 }
 
 fn main() -> io::Result<()> {
-
     let my_stdin = io::stdin();
     let mut buffered = read_file(&my_stdin)?;
 
@@ -55,7 +51,9 @@ fn main() -> io::Result<()> {
     loop {
         let raw_buffer = buffered.fill_buf()?;
         let amount = raw_buffer.len();
-        if amount == 0 { break; }
+        if amount == 0 {
+            break;
+        }
         buffer.extend_from_slice(&raw_buffer);
         let consumed = count_bytes(&mut frequency, &buffer);
         let new_remainder = buffer.slice_from(consumed);

@@ -1,11 +1,11 @@
-use futures::{Async, Poll, Stream, try_ready};
+use futures::{try_ready, Async, Poll, Stream};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
 struct GroupByState<K, S, F>
-    where
-        S: Stream,
+where
+    S: Stream,
 {
     stream: S,
     callback: F,
@@ -17,12 +17,14 @@ struct GroupByState<K, S, F>
     pending_groups: Vec<Result<(K, Group<K, S, F>), S::Error>>,
 }
 
-fn poll_next_group_item<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>,
-                                 index: usize)
-                                 -> Poll<Option<S::Item>, ()>
-    where S: Stream,
-          K: Clone + Eq + Hash,
-          F: FnMut(&S::Item) -> K
+fn poll_next_group_item<K, S, F>(
+    shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>,
+    index: usize,
+) -> Poll<Option<S::Item>, ()>
+where
+    S: Stream,
+    K: Clone + Eq + Hash,
+    F: FnMut(&S::Item) -> K,
 {
     let mut state = shared_state.lock().unwrap();
 
@@ -52,14 +54,20 @@ fn poll_next_group_item<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S,
                     }
                     Some(existing_index) => {
                         // Found an item for another group
-                        match state.pending_items.get_mut(existing_index).map(|x| x.as_mut()) {
+                        match state
+                            .pending_items
+                            .get_mut(existing_index)
+                            .map(|x| x.as_mut())
+                        {
                             Some(Some(pending_items)) => {
                                 pending_items.push_back(item);
                             }
                             Some(None) => {
                                 // Found an item for a dropped group
-                            },
-                            None => unreachable!("there should always be a pending_items entry for each group")
+                            }
+                            None => unreachable!(
+                                "there should always be a pending_items entry for each group"
+                            ),
                         };
                         continue;
                     }
@@ -93,14 +101,15 @@ fn poll_next_group_item<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S,
             Ok(async_state) => return Ok(async_state),
         }
     }
-
 }
 
-fn poll_next_group<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>)
-                            -> Poll<Option<(K, Group<K, S, F>)>, S::Error>
-    where S: Stream,
-          K: Clone + Eq + Hash,
-          F: FnMut(&S::Item) -> K
+fn poll_next_group<K, S, F>(
+    shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>,
+) -> Poll<Option<(K, Group<K, S, F>)>, S::Error>
+where
+    S: Stream,
+    K: Clone + Eq + Hash,
+    F: FnMut(&S::Item) -> K,
 {
     let mut state = shared_state.lock().unwrap();
 
@@ -117,7 +126,7 @@ fn poll_next_group<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>
             None => return Ok(Async::Ready(None)),
             Some(item) => {
                 let key = (&mut state.callback)(&item);
-                match  state.group_indices.get(&key).map(|x| *x) {
+                match state.group_indices.get(&key).map(|x| *x) {
                     Some(existing_index) => {
                         // Found an existing group, add this item to its list of pending
                         if let Some(ref mut pending_items) = state.pending_items[existing_index] {
@@ -126,8 +135,7 @@ fn poll_next_group<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>
 
                         // We already have a group for this key keep looping until we find the next group
                         continue;
-
-                    },
+                    }
                     _ => {
                         // Found an item for a new group
                         let index = state.pending_items.len();
@@ -151,13 +159,15 @@ fn poll_next_group<K, S, F>(shared_state: &mut Arc<Mutex<GroupByState<K, S, F>>>
 }
 
 pub struct GroupBy<K, S, F>
-    where S: Stream
+where
+    S: Stream,
 {
     state: Arc<Mutex<GroupByState<K, S, F>>>,
 }
 
 pub struct Group<K, S, F>
-    where S: Stream
+where
+    S: Stream,
 {
     index: usize,
     state: Arc<Mutex<GroupByState<K, S, F>>>,
@@ -171,7 +181,7 @@ impl<K, S: Stream, F> Drop for Group<K, S, F> {
     }
 }
 
-impl<K: Eq + Hash + Clone, S:Stream, F: FnMut(&S::Item) -> K> GroupBy<K, S, F> {
+impl<K: Eq + Hash + Clone, S: Stream, F: FnMut(&S::Item) -> K> GroupBy<K, S, F> {
     pub(crate) fn new(stream: S, callback: F) -> Self {
         GroupBy {
             state: Arc::new(Mutex::new(GroupByState {
@@ -186,9 +196,10 @@ impl<K: Eq + Hash + Clone, S:Stream, F: FnMut(&S::Item) -> K> GroupBy<K, S, F> {
 }
 
 impl<K, S, F> Stream for Group<K, S, F>
-    where S: Stream,
-          K: Clone + Eq + Hash,
-          F: FnMut(&S::Item) -> K
+where
+    S: Stream,
+    K: Clone + Eq + Hash,
+    F: FnMut(&S::Item) -> K,
 {
     type Item = S::Item;
     type Error = ();
@@ -199,9 +210,10 @@ impl<K, S, F> Stream for Group<K, S, F>
 }
 
 impl<K, S, F> Stream for GroupBy<K, S, F>
-    where S: Stream,
-          K: Clone + Eq + Hash,
-          F: FnMut(&S::Item) -> K
+where
+    S: Stream,
+    K: Clone + Eq + Hash,
+    F: FnMut(&S::Item) -> K,
 {
     type Item = (K, Group<K, S, F>);
     type Error = S::Error;
