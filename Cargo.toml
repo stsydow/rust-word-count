@@ -48,6 +48,10 @@ path = "src/word_count_para_partition_chunked.rs"
 name = "wc-parallel-partition-buf"
 path = "src/word_count_para_partition_buf.rs"
 
+[[bin]]
+name = "wc-parallel-partition-shuffle"
+path = "src/word_count_para_partition_shuffle.rs"
+
 #[[bin]]
 #name = "wc-timely"
 #path = "src/word_count_timely.rs"
