@@ -19,7 +19,7 @@ use tokio::runtime::Runtime;
 
 use word_count::util::*;
 
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, Receiver};
 
 use std::cmp::max;
 use word_count::stream_fork::ForkRR;

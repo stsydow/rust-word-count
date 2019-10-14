@@ -8,8 +8,6 @@ pub struct ShuffleInput<S: Sink, FSel> {
 pub struct Shuffle<S: Sink + Clone, FSel> {
     selector: FSel,
     pipelines: Vec<Option<S>>,
-    inputs: Vec<ShuffleInput<S, FSel>>,
-    // TODO: completion future
 }
 
 impl<S: Sink + Clone, FSel> Shuffle<S, FSel>
@@ -25,8 +23,7 @@ where
 
         Shuffle {
             selector,
-            pipelines,
-            inputs:Vec::new()
+            pipelines
         }
     }
 

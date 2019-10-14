@@ -12,5 +12,6 @@ pub mod global_context;
 pub mod stream_fork;
 pub mod stream_join;
 pub mod stream_shuffle;
+pub mod stream_shuffle_buffered;
 //pub mod parallel_pipeline;
 pub mod selective_context;
