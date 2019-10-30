@@ -102,7 +102,11 @@ fn acc_fn(stream: Receiver<Vec<(Bytes, u64)>>) -> impl Future<Item=Vec<(Bytes, u
             }
 
             future::ok::<FreqTable, io::Error>(frequency)
-        }).map(move |mut sub_table| Vec::from_iter(sub_table.drain()) );
+        }).map(move |mut sub_table| {
+            let freq = Vec::from_iter(sub_table.drain());
+            //freq.sort_unstable_by_key(|&(_, a)| a); //presort seems slower
+            freq
+        } );
     part
 }
 
@@ -168,10 +172,14 @@ fn main() -> io::Result<()> {
             future::ok::<Vec<(Bytes, u64)>, io::Error>(frequency)
         })
         .map(|mut frequency| {
-            frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-            stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY) // <- TODO performance?
-        })
-        .flatten_stream()
+            //frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            //frequency.sort_by_cached_key(|&(_, a)| a);
+            //frequency.sort_by_key(|&(_, a)| a);
+            //frequency.sort_unstable_by(|&(_, a), &(_, b)| b.cmp(&a));
+            frequency.sort_unstable_by_key(|&(_, a)| a);
+            //frequency.chunks(CHUNKS_CAPACITY) // <- TODO performance?
+            stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY)
+        }).flatten_stream()
         .map(|chunk| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {

@@ -3,7 +3,7 @@ RUST_BACKTRACE=1
 #TEXT=~/dev/test_data/100M_rand_text.txt
 TEXT=~/dev/test_data/rand_text.txt
 
-RUNS=1
+RUNS=3
 PERF="perf stat -r${RUNS} -e task-clock  -e cycles:u -e instructions:u -e cache-misses -e page-faults"
 
 
@@ -24,7 +24,7 @@ gcc -march=native -O2 wp.c -o wc-seq-c
 #$PERF ./rustwp/target/release/rustwp $THREADS $TEXT > /dev/null
 
 #$PERF ./target/release/wc-seq $TEXT > /dev/null
-$PERF ./target/release/wc-seq-buf $TEXT > /dev/null
+#$PERF ./target/release/wc-seq-buf $TEXT > /dev/null
 #$PERF ./target/release/wc-async $TEXT > /dev/null
 #$PERF ./target/release/wc-async-buf $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel $TEXT > /dev/null
@@ -33,7 +33,7 @@ $PERF ./target/release/wc-seq-buf $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel-buf $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel-partition -t$THREADS $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel-partition-chunked -t$THREADS $TEXT > /dev/null
-$PERF ./target/release/wc-parallel-partition-buf -t$THREADS $TEXT > /dev/null
+#$PERF ./target/release/wc-parallel-partition-buf -t$THREADS $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel-partition-buf -t8 $TEXT > /dev/null
 $PERF ./target/release/wc-parallel-partition-shuffle-chunked -t$THREADS $TEXT > /dev/null
 #$PERF ./target/release/wc-timely $TEXT > /dev/null

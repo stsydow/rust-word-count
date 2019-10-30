@@ -5,6 +5,6 @@ authors = ["Martin Richtarsky <martin@productive-cpp.com>"]
 edition = "2018"
 
 [dependencies]
-crossbeam = "0.7.2"
+crossbeam = "0.7"
 time = "*"
 memmap = "*"
