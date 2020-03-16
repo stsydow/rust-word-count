@@ -73,6 +73,7 @@ simplelog = "0.7"
 tokio = "0.1"
 futures = "0.1"
 bytes = "0.4"
+libc = "0.2"
 #timely = "0.10"
 
 [profile.release]

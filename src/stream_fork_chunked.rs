@@ -48,7 +48,7 @@ where
         if let Some(sink) = &mut self.pipelines[index] {
             let buffer = &mut self.buffers[index];
             if buffer.len() >= self.capacity {
-                self.buffers.push(Vec::with_capacity(self.capacity))
+                self.buffers.push(Vec::with_capacity(self.capacity));
                 let buf = self.buffers.swap_remove(index);
                 TODO
                 sink.start_send(buf)

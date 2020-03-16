@@ -198,6 +198,41 @@ impl Decoder for WholeWordsCodec {
     }
 }
 
+use libc::{c_long, rusage, suseconds_t, timeval, time_t, getrusage, RUSAGE_SELF};
+
+pub fn get_cputime_usecs() -> (u64, u64) {
+    let mut usage = rusage {
+        ru_utime: timeval{ tv_sec: 0 as time_t, tv_usec: 0 as suseconds_t, },
+        ru_stime: timeval{ tv_sec: 0 as time_t, tv_usec: 0 as suseconds_t, },
+        ru_maxrss: 0 as c_long,
+        ru_ixrss: 0 as c_long,
+        ru_idrss: 0 as c_long,
+        ru_isrss: 0 as c_long,
+        ru_minflt: 0 as c_long,
+        ru_majflt: 0 as c_long,
+        ru_nswap: 0 as c_long,
+        ru_inblock: 0 as c_long,
+        ru_oublock: 0 as c_long,
+        ru_msgsnd: 0 as c_long,
+        ru_msgrcv: 0 as c_long,
+        ru_nsignals: 0 as c_long,
+        ru_nvcsw: 0 as c_long,
+        ru_nivcsw: 0 as c_long,
+    };
+
+    unsafe { getrusage(RUSAGE_SELF, (&mut usage) as *mut rusage); }
+
+    let u_secs = usage.ru_utime.tv_sec as u64;
+    let u_usecs = usage.ru_utime.tv_usec as u64;
+    let s_secs = usage.ru_stime.tv_sec as u64;
+    let s_usecs = usage.ru_stime.tv_usec as u64;
+
+    let u_time = (u_secs * 1_000_000) + u_usecs;
+    let s_time = (s_secs * 1_000_000) + s_usecs;
+
+    (u_time, s_time)
+}
+
 pub struct Config {
     pub output: Option<String>,
     pub input: Option<String>,

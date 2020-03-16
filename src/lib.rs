@@ -1,4 +1,3 @@
-#![feature(process_exitcode_placeholder)]
 //#![feature(impl_trait_in_bindings)]
 //extern crate num_derive;
 
@@ -15,3 +14,4 @@ pub mod stream_shuffle;
 pub mod stream_shuffle_buffered;
 //pub mod parallel_pipeline;
 pub mod selective_context;
+pub mod probe_stream;
