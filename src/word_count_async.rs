@@ -32,35 +32,26 @@ fn main() -> StdResult<()> {
 
     let frequency: HashMap<Vec<u8>, u32> = HashMap::new();
 
-    let dbg_future = Probe::new(Tag::new(input_stream))
+    let dbg_future = Probe::new(Tag::new(input_stream), "self_time".to_owned())
         /*
         .map(|fragment| {
             let start_time = SystemTime::now();
             (start_time, fragment)
         })*/
         .fold(
-            (((std::f64::INFINITY, 0.0),frequency), Vec::<u8>::new()),
-            |(((t_min, t_max), mut frequency), mut remainder), (start_time, buffer)| {
+            ((LogHistogram::new(),frequency), Vec::<u8>::new()),
+            |((mut hist, mut frequency), mut remainder), (start_time, buffer)| {
                 word_count_buf_indexed(&mut frequency, &mut remainder, &buffer);
-
-
-
-                let end_time = SystemTime::now();
-                let difference = end_time.duration_since(start_time)
-                .expect("Clock may have gone backwards");
-
-                let d_t = difference.as_secs_f64();
-                let t_max_n = d_t.max(t_max);
-                let t_min_n = d_t.min(t_min);
-                let result: FutureResult<_, StdError> = future::ok((((t_min_n, t_max_n), frequency), remainder));
+                hist.sample(&start_time);
+                let result: FutureResult<_, StdError> = future::ok(((hist, frequency), remainder));
                 result
             },
         )
-        .map(|(((t_min, t_max), mut frequency), remainder)| {
+        .map(|((hist, mut frequency), remainder)| {
             if !remainder.is_empty() {
                 *frequency.entry(remainder).or_insert(0) += 1;
             }
-            println!("[count] min: {}s max: {}s", t_min, t_max);
+            hist.print_stats("fold");
             frequency
         })
         .map(|frequency| {

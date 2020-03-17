@@ -32,25 +32,19 @@ impl<S, I>  Stream for Tag<S>
     }
 }
 
-pub struct Probe<S>
-    where S: Stream
+pub struct LogHistogram
 {
-    //TODO name
-    t_min:u64,
-    t_max:u64,
+    min:u64,
+    max:u64,
     hist: [u64;64],
-    stream: S
 }
 
-impl<S, I> Probe<S>
-    where S: Stream<Item=(SystemTime, I)>
-{
-    pub fn new(stream: S) -> Self {
-        Probe {
-            t_min: std::u64::MAX,
-            t_max: 0,
+impl LogHistogram {
+    pub fn new() -> Self {
+        LogHistogram {
+            min: std::u64::MAX,
+            max: 0,
             hist: [0;64],
-            stream
         }
     }
 
@@ -58,19 +52,19 @@ impl<S, I> Probe<S>
                 let difference = ref_time.elapsed()
                     .expect("Clock may have gone backwards")
                     .as_nanos() as u64;
-                let t_max_n = difference.max(self.t_max);
-                self.t_max = t_max_n;
-                let t_min_n = difference.min(self.t_min);
-                self.t_min = t_min_n;
+                let t_max_n = difference.max(self.max);
+                self.max = t_max_n;
+                let t_min_n = difference.min(self.min);
+                self.min = t_min_n;
                 self.hist[(64 - difference.leading_zeros()) as usize] += 1u64;
     }
 
-    pub fn print_stats(&self) {
-        println!("min: {}ns max: {}ns", self.t_min, self.t_max);
+    pub fn print_stats(&self, name: &str) {
+        println!("[{}] median: {}ns min: {}ns max: {}ns",name, self.median(), self.min, self.max);
         // TODO rather use plotlib?
         for i in 0 .. 64 {
             let bin_time = 1<<i;
-            if self.t_min > bin_time ||  self.t_max * 2  < bin_time {
+            if self.min > bin_time ||  self.max * 2  < bin_time {
                 continue;
             }
 
@@ -79,9 +73,48 @@ impl<S, I> Probe<S>
             for _c in 0 .. (64 - count.leading_zeros()) {
                 print!("#")
             }
-            print!("\n");
+            print!("\t{}\n", count);
         }
     }
+
+    // TODO more accuracy! http://www.cs.uni.edu/~campbell/stat/histrev2.html
+    pub fn median(&self) -> u64 {
+        let mut n:u64 = 0;
+        for i in 0 .. self.hist.len() {
+            let f = self.hist[i];
+            n += f;
+        }
+
+        let mut samples:u64 = 0;
+        for i in 0 .. self.hist.len() {
+            samples += self.hist[i];
+            if samples > n/2 {
+                return 1u64<<i;
+            }
+        }
+        unreachable!()
+    }
+}
+
+pub struct Probe<S>
+    where S: Stream
+{
+    name: String,
+    hist: LogHistogram,
+    stream: S
+}
+
+impl<S, I> Probe<S>
+    where S: Stream<Item=(SystemTime, I)>
+{
+    pub fn new(stream: S, name: String) -> Self {
+        Probe {
+            name,
+            hist: LogHistogram::new(),
+            stream
+        }
+    }
+
 }
 
 
@@ -102,13 +135,16 @@ impl<S, I>  Stream for Probe<S>
 
             },
             Ok(Async::Ready(None)) => {
-                self.print_stats();
+                self.hist.print_stats(&self.name);
             },
             Ok(Async::Ready(Some((ref time, ref _item)))) => {
-                self.sample(time);
+                self.hist.sample(time);
             }
         };
 
         result
     }
 }
+
+
+//TODO ProbeAndTag?

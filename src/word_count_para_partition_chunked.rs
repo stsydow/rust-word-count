@@ -24,6 +24,9 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use std::cmp::max;
 use word_count::stream_fork::ForkRR;
 
+use word_count::probe_stream::*;
+use std::time::SystemTime;
+
 const BUFFER_SIZE: usize = 4;
 
 //use futures::sync::mpsc::channel;
@@ -53,16 +56,21 @@ where
 }
 
 #[inline(never)]
-fn task_fn(stream: Receiver<Vec<Bytes>>) -> impl Future<Item = FreqTable, Error = io::Error> {
-    let table_future = stream
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(FreqTable::new(), |mut frequency, chunk| {
+fn task_fn(stream: Receiver<(SystemTime, Vec<Bytes>)>) -> impl Future<Item = FreqTable, Error = io::Error> {
+    let in_stream = stream.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
+    let table_future = in_stream
+        .fold((LogHistogram::new(), FreqTable::new()),
+            |(mut hist, mut frequency), (tag_time, chunk)| {
             for word in chunk {
                 if !word.is_empty() {
                     *frequency.entry(word).or_insert(0) += 1;
                 }
             }
-            future::ok::<FreqTable, io::Error>(frequency)
+            hist.sample(&tag_time);
+            future::ok::<(LogHistogram, FreqTable), io::Error>((hist, frequency))
+        }).map(|(hist, frequency)| {
+            hist.print_stats("count");
+            frequency
         });
     table_future
 }
@@ -83,7 +91,7 @@ fn main() -> io::Result<()> {
         let pipe_theards = max(1, conf.threads - 1); // discount I/O Thread
         let (out_tx, out_rx) = channel::<FreqTable>(pipe_theards);
         for _i in 0..pipe_theards {
-            let (in_tx, in_rx) = channel::<Vec<Bytes>>(BUFFER_SIZE);
+            let (in_tx, in_rx) = channel::<(SystemTime, Vec<Bytes>)>(BUFFER_SIZE);
 
             senders.push(in_tx);
             let pipe = reduce_task(in_rx, out_tx.clone(), task_fn);
@@ -96,7 +104,7 @@ fn main() -> io::Result<()> {
         (fork, out_rx)
     };
 
-    let file_reader = input_stream
+    let file_reader = Tag::new(input_stream)
         .forward(fork.sink_map_err(|e| {
             io::Error::new(io::ErrorKind::Other, format!("fork send error: {}", e))
         }))
@@ -110,18 +118,28 @@ fn main() -> io::Result<()> {
     let sub_table_stream /*: impl Stream<Item=HashMap<Vec<u8>, u64>, Error=io::Error> + Send*/ = join
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
 
-    let file_writer = sub_table_stream
-        .fold(FreqTable::new(), |mut frequency, mut sub_table| {
+    let table_future = Tag::new(sub_table_stream)
+        .fold((LogHistogram::new(), FreqTable::new()), |(mut hist, mut frequency), (tag_time, mut sub_table)| {
             for (word, count) in sub_table.drain() {
                 *frequency.entry(word).or_insert(0) += count;
             }
-            future::ok::<FreqTable, io::Error>(frequency)
+            hist.sample(&tag_time);
+            future::ok::<(LogHistogram, FreqTable), io::Error>((hist, frequency))
         })
-        .map(|mut frequency| {
+        .map(|(hist, frequency)| {
+            hist.print_stats("merge");
+            frequency
+        });
+
+    let sort_stream = table_future.map(|mut frequency| {
+            let start_time = SystemTime::now();
             let mut frequency_vec = Vec::from_iter(frequency.drain());
             frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            let difference = start_time.elapsed().expect("clock goes backwards!");
+            println!("[sort] {:?}", difference);
             stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
-        })
+        });
+    let file_writer = sort_stream
         .flatten_stream()
         .map(|chunk| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
@@ -131,9 +149,11 @@ fn main() -> io::Result<()> {
                 if buffer.remaining_mut() < max_len {
                     buffer.reserve(10 * max_len);
                 }
+                /*
                 buffer
                     .write_fmt(format_args!("{} {}\n", word, count))
                     .expect("Formating error");
+                */
             }
             buffer.freeze()
         })
