@@ -1,7 +1,7 @@
 use tokio::prelude::*;
 use tokio;
 //use tracing::{trace, error, Span};
-use std::time::{ SystemTime, Duration};
+use std::time::{ Instant, Duration};
 use futures::try_ready;
 
 pub struct Tag<S>
@@ -23,12 +23,12 @@ impl<S> Tag<S>
 impl<S, I>  Stream for Tag<S>
     where S: Stream<Item=I>
 {
-    type Item = (SystemTime, S::Item);
+    type Item = (Instant, S::Item);
     type Error = S::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let maybe_item = try_ready!(self.stream.poll());
-        Ok(Async::Ready( maybe_item.map(|item| (SystemTime::now(), item))))
+        Ok(Async::Ready( maybe_item.map(|item| (Instant::now(), item))))
     }
 }
 
@@ -44,14 +44,16 @@ impl LogHistogram {
         LogHistogram {
             min: std::u64::MAX,
             max: 0,
-            hist: [0;64],
+            hist: [0;64], // use 128 bins maybe: 10^(log(1<<64 -1 ) / 128) = 1.41421356 or estimate with first two non zero bits
         }
     }
 
-    pub fn sample(&mut self, ref_time: &SystemTime) {
+    pub fn sample(&mut self, ref_time: &Instant) {
                 let difference = ref_time.elapsed()
-                    .expect("Clock may have gone backwards")
                     .as_nanos() as u64;
+                // TODO use TSC for lower overhead:
+                // https://crates.io/crates/tsc-timer
+                // http://gz.github.io/rust-perfcnt/x86/time/fn.rdtsc.html
                 let t_max_n = difference.max(self.max);
                 self.max = t_max_n;
                 let t_min_n = difference.min(self.min);
@@ -60,7 +62,10 @@ impl LogHistogram {
     }
 
     pub fn print_stats(&self, name: &str) {
-        println!("[{}] median: {}ns min: {}ns max: {}ns",name, self.median(), self.min, self.max);
+        println!("[{}] median(est.): {:0.3}us 5%: {:0.3}us 95%: {:0.3}us  min: {:0.3}us max: {:0.3}us",
+        name, self.percentile(0.5)/1000.0, self.percentile(0.05)/1000.0, self.percentile(0.95)/1000.0,
+        self.min as f32/1000.0, self.max as f32/1000.0);
+        /*
         // TODO rather use plotlib?
         for i in 0 .. 64 {
             let bin_time = 1<<i;
@@ -75,22 +80,29 @@ impl LogHistogram {
             }
             print!("\t{}\n", count);
         }
+        */
     }
 
-    // TODO more accuracy! http://www.cs.uni.edu/~campbell/stat/histrev2.html
-    pub fn median(&self) -> u64 {
+    // TODO log transformations for narrow distributions is inaccurate
+    pub fn percentile(&self, p: f32) -> f32 {
         let mut n:u64 = 0;
+        assert!(p >= 0.0 && p <= 1.0);
         for i in 0 .. self.hist.len() {
             let f = self.hist[i];
             n += f;
         }
 
+        let p_count = (n as f32) * p;
         let mut samples:u64 = 0;
         for i in 0 .. self.hist.len() {
-            samples += self.hist[i];
-            if samples > n/2 {
-                return 1u64<<i;
+            let c_bin = self.hist[i];
+            let samples_incl = samples + c_bin;
+            if samples_incl > p_count as u64 {
+                let d_bin = (p_count - samples as f32) / c_bin as f32;
+                let log_val = (i -1) as f32 + d_bin;
+                return log_val.exp2();
             }
+            samples = samples_incl;
         }
         unreachable!()
     }
@@ -105,7 +117,7 @@ pub struct Probe<S>
 }
 
 impl<S, I> Probe<S>
-    where S: Stream<Item=(SystemTime, I)>
+    where S: Stream<Item=(Instant, I)>
 {
     pub fn new(stream: S, name: String) -> Self {
         Probe {
@@ -119,7 +131,7 @@ impl<S, I> Probe<S>
 
 
 impl<S, I>  Stream for Probe<S>
-    where S: Stream<Item=(SystemTime, I)>
+    where S: Stream<Item=(Instant, I)>
 {
     type Item = S::Item;
     type Error = S::Error;

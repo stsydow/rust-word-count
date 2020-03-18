@@ -15,7 +15,7 @@ use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use word_count::util::*;
-use std::time::SystemTime;
+use std::time::Instant;
 use word_count::probe_stream::*;
 
 fn main() -> StdResult<()> {
@@ -23,7 +23,7 @@ fn main() -> StdResult<()> {
     let mut runtime = Runtime::new()?;
 
     let (start_usr_time, start_sys_time) =  get_cputime_usecs();
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
 
     let (input, output) = open_io_async(&conf);
 
@@ -35,7 +35,7 @@ fn main() -> StdResult<()> {
     let dbg_future = Probe::new(Tag::new(input_stream), "self_time".to_owned())
         /*
         .map(|fragment| {
-            let start_time = SystemTime::now();
+            let start_time = Instant::now();
             (start_time, fragment)
         })*/
         .fold(
@@ -69,10 +69,8 @@ fn main() -> StdResult<()> {
 
     let (_, _output_stream) = runtime.block_on(dbg_future)?;
 
-    let end_time = SystemTime::now();
+    let difference = start_time.elapsed();
     let (end_usr_time, end_sys_time) = get_cputime_usecs();
-    let difference = end_time.duration_since(start_time)
-        .expect("Clock may have gone backwards");
     let usr_time = (end_usr_time - start_usr_time) as f64 / 1000_000.0;
     let sys_time = (end_sys_time - start_sys_time) as f64 / 1000_000.0;
     println!("walltime: {:?} (usr: {:.3}s sys: {:.3}s)",
