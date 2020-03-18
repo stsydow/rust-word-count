@@ -36,6 +36,7 @@ pub struct LogHistogram
 {
     min:u64,
     max:u64,
+    sum:u64,
     hist: [u64;64],
 }
 
@@ -47,6 +48,7 @@ impl LogHistogram {
         LogHistogram {
             min: std::u64::MAX,
             max: 0,
+            sum: 0,
             hist: [0;64], // use 128 bins maybe: 10^(log(1<<64 -1 ) / 128) = 1.41421356 or estimate with first two non zero bits
         }
     }
@@ -57,6 +59,7 @@ impl LogHistogram {
                 // TODO use TSC for lower overhead:
                 // https://crates.io/crates/tsc-timer
                 // http://gz.github.io/rust-perfcnt/x86/time/fn.rdtsc.html
+                self.sum += difference;
                 let t_max_n = difference.max(self.max);
                 self.max = t_max_n;
                 let t_min_n = difference.min(self.min);
@@ -111,9 +114,9 @@ impl LogHistogram {
                 }
             }
         }
-        println!("[{}] 5%:{:0.3}ms med:_{:0.3}ms_ 95%:{:0.3}ms\n min: {:0.3}ms |{}| max: {:0.3}ms",
-        name,
-        self.percentile(0.5)/1000_000.0, self.percentile(0.05)/1000_000.0, self.percentile(0.95)/1000_000.0,
+        println!("[{}] ops: {} acc_time:{:0.3}ms\n 5%:{:0.3}ms med:_{:0.3}ms_ 95%:{:0.3}ms\n min: {:0.3}ms |{}| max: {:0.3}ms",
+        name, self.size(), self.sum as f32/1000_000.0,
+        self.percentile(0.05)/1000_000.0, self.percentile(0.5)/1000_000.0, self.percentile(0.95)/1000_000.0,
         self.min as f32/1000_000.0, spark_line.iter().collect::<String>() ,self.max as f32/1000_000.0
         );
 
@@ -135,16 +138,20 @@ impl LogHistogram {
         */
     }
 
-    // TODO log transformations for narrow distributions is inaccurate
-    pub fn percentile(&self, p: f32) -> f32 {
+    fn size(&self) -> u64 {
         let mut n:u64 = 0;
-        assert!(p >= 0.0 && p <= 1.0);
         for i in 0 .. self.hist.len() {
             let f = self.hist[i];
             n += f;
         }
+        n
+    }
 
-        let p_count = (n as f32) * p;
+    // TODO log transformations for narrow distributions is inaccurate
+    pub fn percentile(&self, p: f32) -> f32 {
+        assert!(p >= 0.0 && p <= 1.0);
+
+        let p_count = (self.size() as f32) * p;
         let mut samples:u64 = 0;
         for i in 0 .. self.hist.len() {
             let c_bin = self.hist[i];

@@ -56,9 +56,9 @@ where
 }
 
 #[inline(never)]
-fn task_fn(stream: Receiver<(Instant, Vec<Bytes>)>) -> impl Future<Item = FreqTable, Error = io::Error> {
+fn task_fn(stream: Receiver<Vec<Bytes>>) -> impl Future<Item = FreqTable, Error = io::Error> {
     let in_stream = stream.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)));
-    let table_future = in_stream
+    let table_future = Tag::new(in_stream)
         .fold((LogHistogram::new(), FreqTable::new()),
             |(mut hist, mut frequency), (tag_time, chunk)| {
             for word in chunk {
@@ -91,7 +91,7 @@ fn main() -> io::Result<()> {
         let pipe_theards = max(1, conf.threads - 1); // discount I/O Thread
         let (out_tx, out_rx) = channel::<FreqTable>(pipe_theards);
         for _i in 0..pipe_theards {
-            let (in_tx, in_rx) = channel::<(Instant, Vec<Bytes>)>(BUFFER_SIZE);
+            let (in_tx, in_rx) = channel::<Vec<Bytes>>(BUFFER_SIZE);
 
             senders.push(in_tx);
             let pipe = reduce_task(in_rx, out_tx.clone(), task_fn);
@@ -104,7 +104,7 @@ fn main() -> io::Result<()> {
         (fork, out_rx)
     };
 
-    let file_reader = Tag::new(input_stream)
+    let file_reader = input_stream
         .forward(fork.sink_map_err(|e| {
             io::Error::new(io::ErrorKind::Other, format!("fork send error: {}", e))
         }))
