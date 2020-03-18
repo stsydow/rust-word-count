@@ -39,6 +39,9 @@ pub struct LogHistogram
     hist: [u64;64],
 }
 
+const BARS: &'static [char;9] = &['_','▁','▂','▃','▄','▅','▆','▇','█'];
+const BARS_MAX:usize = 8;
+
 impl LogHistogram {
     pub fn new() -> Self {
         LogHistogram {
@@ -61,12 +64,61 @@ impl LogHistogram {
                 self.hist[(64 - difference.leading_zeros()) as usize] += 1u64;
     }
 
+    fn print_sparkline(& self){
+
+        let f_max = self.hist.iter().max().unwrap();
+        let log_f_max = 64 - f_max.leading_zeros();
+
+        let line: String = self.hist.iter().map(|f| {
+            let log_f = 64 - f.leading_zeros();
+
+            let i = if log_f_max > BARS_MAX as u32 {
+                log_f.saturating_sub(log_f_max - BARS_MAX as u32)
+            } else {
+                log_f
+            } as usize;
+            BARS[i]
+        }).collect();
+        println!("{:?}", line);
+    }
+
     pub fn print_stats(&self, name: &str) {
-        println!("[{}] median(est.): {:0.3}us 5%: {:0.3}us 95%: {:0.3}us  min: {:0.3}us max: {:0.3}us",
-        name, self.percentile(0.5)/1000.0, self.percentile(0.05)/1000.0, self.percentile(0.95)/1000.0,
-        self.min as f32/1000.0, self.max as f32/1000.0);
-        /*
+        let mut spark_line:Vec<char> = Vec::with_capacity(64);
+        {
+            let f_max = self.hist.iter().max().unwrap();
+            let log_f_max = 64 - f_max.leading_zeros() as i32;
+            for i in 0 .. 64 {
+                let bin_time = 1<<i;
+                if self.min > bin_time ||  self.max * 2  < bin_time {
+                    continue;
+                }
+
+                let f = self.hist[i];
+                let log_f = 64 - f.leading_zeros() as i32;
+                let b = if log_f_max > BARS_MAX as i32 {
+                    log_f - (log_f_max - BARS_MAX as i32)
+                } else {
+                    log_f
+                };
+                if b < 0 {
+                    if f > 0 {
+                        spark_line.push('.');
+                    } else {
+                        spark_line.push(' ');
+                    }
+                } else {
+                    spark_line.push(BARS[b as usize].clone());
+                }
+            }
+        }
+        println!("[{}] 5%:{:0.3}ms med:_{:0.3}ms_ 95%:{:0.3}ms\n min: {:0.3}ms |{}| max: {:0.3}ms",
+        name,
+        self.percentile(0.5)/1000_000.0, self.percentile(0.05)/1000_000.0, self.percentile(0.95)/1000_000.0,
+        self.min as f32/1000_000.0, spark_line.iter().collect::<String>() ,self.max as f32/1000_000.0
+        );
+
         // TODO rather use plotlib?
+        /*
         for i in 0 .. 64 {
             let bin_time = 1<<i;
             if self.min > bin_time ||  self.max * 2  < bin_time {
