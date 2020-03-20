@@ -43,6 +43,19 @@ pub struct LogHistogram
 const BARS: &'static [char;9] = &['_','▁','▂','▃','▄','▅','▆','▇','█'];
 const BARS_MAX:usize = 8;
 
+fn format_nanos(t:f32) -> String {
+
+    if t < 500.0 {
+        format!("{:0.3}ns", t)
+    } else if t <  500_000.0 {
+        format!("{:0.3}us", t/1000.0)
+    } else if t < 500_000_000.0 {
+        format!("{:0.3}ms", t/1000_000.0)
+    } else {
+        format!("{:0.3}s", t/1000_000_000.0)
+    }
+}
+
 impl LogHistogram {
     pub fn new() -> Self {
         LogHistogram {
@@ -67,25 +80,7 @@ impl LogHistogram {
                 self.hist[(64 - difference.leading_zeros()) as usize] += 1u64;
     }
 
-    fn print_sparkline(& self){
-
-        let f_max = self.hist.iter().max().unwrap();
-        let log_f_max = 64 - f_max.leading_zeros();
-
-        let line: String = self.hist.iter().map(|f| {
-            let log_f = 64 - f.leading_zeros();
-
-            let i = if log_f_max > BARS_MAX as u32 {
-                log_f.saturating_sub(log_f_max - BARS_MAX as u32)
-            } else {
-                log_f
-            } as usize;
-            BARS[i]
-        }).collect();
-        println!("{:?}", line);
-    }
-
-    pub fn print_stats(&self, name: &str) {
+    fn sparkline(& self) -> String {
         let mut spark_line:Vec<char> = Vec::with_capacity(64);
         {
             let f_max = self.hist.iter().max().unwrap();
@@ -114,28 +109,15 @@ impl LogHistogram {
                 }
             }
         }
-        println!("[{}] ops: {} acc_time:{:0.3}ms\n 5%:{:0.3}ms med:_{:0.3}ms_ 95%:{:0.3}ms\n min: {:0.3}ms |{}| max: {:0.3}ms",
-        name, self.size(), self.sum as f32/1000_000.0,
-        self.percentile(0.05)/1000_000.0, self.percentile(0.5)/1000_000.0, self.percentile(0.95)/1000_000.0,
-        self.min as f32/1000_000.0, spark_line.iter().collect::<String>() ,self.max as f32/1000_000.0
+        spark_line.iter().collect::<String>()
+    }
+
+    pub fn print_stats(&self, name: &str) {
+        println!("[{}] ops: {} acc_time:{} mean_time:{}\n 5%:{} med:_{}_ 95%:{}\n min: {} |{}| max: {}",
+        name, self.size(), format_nanos(self.sum as f32), format_nanos(self.sum as f32 / self.size() as f32),
+        format_nanos(self.percentile(0.05)), format_nanos(self.percentile(0.5)), format_nanos(self.percentile(0.95)),
+        format_nanos(self.min as f32), self.sparkline() ,format_nanos(self.max as f32)
         );
-
-        // TODO rather use plotlib?
-        /*
-        for i in 0 .. 64 {
-            let bin_time = 1<<i;
-            if self.min > bin_time ||  self.max * 2  < bin_time {
-                continue;
-            }
-
-            let count = self.hist[i];
-            print!("{:?} \t" , Duration::from_nanos(bin_time));
-            for _c in 0 .. (64 - count.leading_zeros()) {
-                print!("#")
-            }
-            print!("\t{}\n", count);
-        }
-        */
     }
 
     fn size(&self) -> u64 {
