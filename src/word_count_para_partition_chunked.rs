@@ -25,6 +25,7 @@ use std::cmp::max;
 use word_count::stream_fork::ForkRR;
 
 use word_count::probe_stream::*;
+use word_count::LogHistogram;
 use std::time::Instant;
 
 const BUFFER_SIZE: usize = 4;

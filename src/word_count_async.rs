@@ -14,9 +14,10 @@ use futures::future::FutureResult;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-use word_count::util::*;
 use std::time::Instant;
+use word_count::util::*;
 use word_count::probe_stream::*;
+use word_count::LogHistogram;
 
 fn main() -> StdResult<()> {
     let conf = parse_args("word count async");

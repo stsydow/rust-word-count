@@ -15,3 +15,6 @@ pub mod stream_shuffle_buffered;
 //pub mod parallel_pipeline;
 pub mod selective_context;
 pub mod probe_stream;
+mod log_histogram;
+pub use crate::log_histogram::LogHistogram;
+pub mod instrumented_map;

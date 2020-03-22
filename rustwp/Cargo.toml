@@ -8,3 +8,15 @@ edition = "2018"
 crossbeam = "0.7"
 time = "*"
 memmap = "*"
+
+[profile.release]
+lto= "fat"
+opt-level = 3
+#debug = 1
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
+debug = 2
+
