@@ -9,15 +9,14 @@ use std::io::Error as StdError;
 use std::io::Result as StdResult;
 use std::iter::FromIterator;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures::future::FutureResult;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use std::time::Instant;
 use word_count::util::*;
-use word_count::probe_stream::*;
-use word_count::LogHistogram;
+use word_count::{StreamExt};
 
 fn main() -> StdResult<()> {
     let conf = parse_args("word count async");
@@ -33,26 +32,25 @@ fn main() -> StdResult<()> {
 
     let frequency: HashMap<Vec<u8>, u32> = HashMap::new();
 
-    let dbg_future = Probe::new(Tag::new(input_stream), "self_time".to_owned())
+    let dbg_future = input_stream//.instrumented_map(|i| i, "self_time".to_owned())
         /*
         .map(|fragment| {
             let start_time = Instant::now();
             (start_time, fragment)
         })*/
-        .fold(
-            ((LogHistogram::new(),frequency), Vec::<u8>::new()),
-            |((mut hist, mut frequency), mut remainder), (start_time, buffer)| {
+        .instrumented_fold(
+            (frequency, Vec::<u8>::new()),
+            |(mut frequency, mut remainder), buffer| {
                 word_count_buf_indexed(&mut frequency, &mut remainder, &buffer);
-                hist.sample(&start_time);
-                let result: FutureResult<_, StdError> = future::ok(((hist, frequency), remainder));
+                let result: FutureResult<_, StdError> = future::ok((frequency, remainder));
                 result
             },
+            "split_and_count".to_owned()
         )
-        .map(|((hist, mut frequency), remainder)| {
+        .map(|(mut frequency, remainder)| {
             if !remainder.is_empty() {
                 *frequency.entry(remainder).or_insert(0) += 1;
             }
-            hist.print_stats("fold");
             frequency
         })
         .map(|frequency| {
@@ -61,11 +59,11 @@ fn main() -> StdResult<()> {
             stream::iter_ok(frequency_vec)
         })
         .flatten_stream()
-        .map(|(word_raw, count)| {
+        .instrumented_map(|(word_raw, count):(Vec<u8>,_)| {
             let word = ::std::str::from_utf8(&word_raw).expect("UTF8 encoding error");
-            //Bytes::from(format!("{} {}\n", word, count))
+            let _real_output = Bytes::from(format!("{} {}\n", word, count));
             Bytes::from(format!(""))
-        })
+        }, "format".to_owned())
         .forward(output_stream);
 
     let (_, _output_stream) = runtime.block_on(dbg_future)?;

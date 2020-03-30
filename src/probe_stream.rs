@@ -5,13 +5,11 @@ use futures::try_ready;
 use crate::LogHistogram;
 
 pub struct Tag<S>
-    where S: Stream
 {
     stream: S
 }
 
 impl<S> Tag<S>
-    where S: Stream
 {
     pub fn new(stream: S) -> Self {
         Tag {
@@ -34,7 +32,6 @@ impl<S, I>  Stream for Tag<S>
 
 
 pub struct Probe<S>
-    where S: Stream
 {
     name: String,
     hist: LogHistogram,

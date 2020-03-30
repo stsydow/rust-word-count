@@ -21,11 +21,11 @@ gcc -march=native -O2 wp.c -o wc-seq-c
 #exit
 
 #$PERF ./wc-seq-c $TEXT>  /dev/null
-$PERF ./rustwp/target/release/rustwp $THREADS $TEXT > /dev/null
+#$PERF ./rustwp/target/release/rustwp $THREADS $TEXT > /dev/null
 
 #$PERF ./target/release/wc-seq $TEXT > /dev/null
 #$PERF ./target/release/wc-seq-buf $TEXT > /dev/null
-##$PERF ./target/release/wc-async $TEXT #> /dev/null
+$PERF ./target/release/wc-async $TEXT #> /dev/null
 #$PERF ./target/release/wc-async-buf $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel $TEXT > /dev/null
 #$PERF ./target/release/wc-parallel-fine $TEXT > /dev/null

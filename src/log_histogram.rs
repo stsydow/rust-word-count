@@ -1,4 +1,5 @@
 use std::time::{ Instant };
+use std::fmt;
 
 pub struct LogHistogram
 {
@@ -116,3 +117,15 @@ impl LogHistogram {
         unreachable!()
     }
 }
+
+impl fmt::Debug for LogHistogram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LogHistogram")
+         .field("min", &self.min)
+         .field("max", &self.max)
+         .field("sum", &self.sum)
+         .field("hist", &format_args!("{}", self.sparkline()))
+         .finish()
+    }
+}
+
