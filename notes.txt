@@ -1,0 +1,16 @@
+
+Processing Primitives:
+
+- Map
+- Fold
+
+- Parallel Pipeline
+    - Fork -> Map -> Join  / Fork -> Map_1 -> Rearrange -> Map_2 -> Join
+    - !implement at least map and fold
+    - !tag events with sequenceNr - ? overhead vs. ease of use
+    - see impl at https://blog.yoshuawuyts.com/
+
+- Stateful Processing
+    - a secial case of Fold with an output stream
+    - state sampling / "pull()" - howto sync on parallel pipelines
+    - select context by key - !integrate selector with Fork / Rearrange
