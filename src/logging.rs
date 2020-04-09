@@ -26,6 +26,7 @@ impl fmt::Display for LoggingError {
 }
 
 impl Error for LoggingError {
+    /*
     fn description(&self) -> &str {
         match *self {
             LoggingError::Io(ref err) => err.description(),
@@ -33,6 +34,7 @@ impl Error for LoggingError {
             LoggingError::TerminalError => "missing terminal error",
         }
     }
+    */
 
     fn cause(&self) -> Option<&dyn Error> {
         match *self {
@@ -86,7 +88,7 @@ pub fn set_logger_or_exit(log_stream: &str, log_level: LevelFilter) {
             stderr.lock(),
             "can't start logging to \"{}\": {}",
             log_stream,
-            err.description()
+            err
         );
         exit(-1);
     }

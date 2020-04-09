@@ -10,14 +10,14 @@ pub struct SelectiveContext<Key, Ctx, InStream, FInit, FSel, FWork> {
     input: InStream,
 }
 
-impl<Event, R, Key, Ctx, InStream, FInit, FSel, FWork>
+impl<R, Key, Ctx, InStream, FInit, FSel, FWork>
     SelectiveContext<Key, Ctx, InStream, FInit, FSel, FWork>
 where
     Key: Ord,
-    InStream: Stream<Item = Event>,
+    InStream: Stream,
     FInit: Fn(&Key) -> Ctx,
-    FSel: Fn(&Event) -> Key,
-    FWork: Fn(&mut Ctx, &Event) -> R,
+    FSel: Fn(&InStream::Item) -> Key,
+    FWork: Fn(&mut Ctx, &InStream::Item) -> R,
 {
     pub fn new(input: InStream, ctx_builder: FInit, selector: FSel, work: FWork) -> Self {
         SelectiveContext {
@@ -29,7 +29,7 @@ where
         }
     }
 
-    fn apply(&mut self, event: &Event) -> R {
+    fn apply(&mut self, event: &InStream::Item) -> R {
         let key = (self.selector)(event);
 
         let work_fn = &self.work;
@@ -46,19 +46,18 @@ where
     }
 }
 
-pub fn selective_context<Event, R, Key, Ctx, InStream, CtxInit, FSel, FWork>(
+pub fn selective_context<R, Key, Ctx, InStream, CtxInit, FSel, FWork>(
     input: InStream,
     ctx_builder: CtxInit,
     selector: FSel,
     work: FWork,
 ) -> SelectiveContext<Key, Ctx, InStream, CtxInit, FSel, FWork>
 where
-    //Ctx:Context<Event=Event, Result=R>,
-    InStream: Stream<Item = Event>,
+    InStream: Stream,
     Key: Ord,
     CtxInit: Fn(&Key) -> Ctx,
-    FSel: Fn(&Event) -> Key,
-    FWork: Fn(&mut Ctx, &Event) -> R,
+    FSel: Fn(&InStream::Item) -> Key,
+    FWork: Fn(&mut Ctx, &InStream::Item) -> R,
 {
     SelectiveContext {
         ctx_init: ctx_builder,
@@ -69,18 +68,17 @@ where
     }
 }
 
-impl<Event, Error, R, Key, Ctx, InStream, CtxInit, FSel, FWork> Stream
+impl<R, Key, Ctx, InStream, CtxInit, FSel, FWork> Stream
     for SelectiveContext<Key, Ctx, InStream, CtxInit, FSel, FWork>
 where
-    //Ctx:Context<Event=Event, Result=R>,
-    InStream: Stream<Item = Event, Error = Error>,
+    InStream: Stream,
     Key: Ord,
     CtxInit: Fn(&Key) -> Ctx,
-    FSel: Fn(&Event) -> Key,
-    FWork: Fn(&mut Ctx, &Event) -> R,
+    FSel: Fn(&InStream::Item) -> Key,
+    FWork: Fn(&mut Ctx, &InStream::Item) -> R,
 {
     type Item = R;
-    type Error = Error;
+    type Error = InStream::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let async_event = try_ready!(self.input.poll());

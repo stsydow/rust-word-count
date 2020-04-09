@@ -9,7 +9,7 @@ use std::io::Error as StdError;
 use std::io::Result as StdResult;
 use std::iter::FromIterator;
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::future::FutureResult;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;

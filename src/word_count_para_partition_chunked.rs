@@ -150,12 +150,12 @@ fn main() -> io::Result<()> {
                 if buffer.remaining_mut() < max_len {
                     buffer.reserve(10 * max_len);
                 }
-                /*
                 buffer
                     .write_fmt(format_args!("{} {}\n", word, count))
                     .expect("Formating error");
-                */
             }
+            //TODO FIXME dropping output for profiling
+            buffer.truncate(0);
             buffer.freeze()
         })
         .forward(output_stream);

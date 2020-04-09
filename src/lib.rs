@@ -25,6 +25,7 @@ use tokio::prelude::*;
 impl<T: ?Sized> StreamExt for T where T: Stream {}
 
 pub trait StreamExt: Stream {
+    // TODO rename to map
     fn instrumented_map<U, F>(self, f: F, name: String) -> instrumented_map::InstrumentedMap<Self, F>
         where F: FnMut(Self::Item) -> U,
               Self: Sized
@@ -32,6 +33,7 @@ pub trait StreamExt: Stream {
         instrumented_map::new(self, f, name)
     }
 
+    // TODO rename to fold
     fn instrumented_fold<Fut, T, F>(self, init:T, f:F, name: String) -> instrumented_fold::InstrumentedFold<Self, F, Fut, T>
         where F: FnMut(T, Self::Item) -> Fut,
               Fut: IntoFuture<Item = T>,
@@ -41,4 +43,47 @@ pub trait StreamExt: Stream {
     {
         instrumented_fold::new(self, f, init, name)
     }
+
+
+    //TODO instrument ; add name
+    fn selective_context<R, Key, Ctx, CtxInit, FSel, FWork>(
+        self,
+        ctx_builder: CtxInit,
+        selector: FSel,
+        work: FWork,
+    ) -> selective_context::SelectiveContext<Key, Ctx, Self, CtxInit, FSel, FWork>
+    where
+        //Ctx:Context<Event=Event, Result=R>,
+        Key: Ord,
+        CtxInit: Fn(&Key) -> Ctx,
+        FSel: Fn(&Self::Item) -> Key,
+        FWork: Fn(&mut Ctx, &Self::Item) -> R,
+        Self: Sized,
+    {
+        selective_context::selective_context(self, ctx_builder, selector, work)
+    }
 }
+
+/* TODO
+// see https://github.com/async-rs/parallel-stream/
+  fork Stream -> ParallelStream
+
+  pub trait ParallelStream {
+
+        map()
+        context()
+        ?fold()
+
+        join() -> Stream
+        reorder()
+  }
+
+
+  pub trait TaggedStream {
+
+  }
+  fork(Stream) -> TaggedStream
+  join!([TaggedStream]) -> Stream
+
+ */
+
