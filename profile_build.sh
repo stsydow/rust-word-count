@@ -1,5 +1,5 @@
-RUSTFLAGS="-C force-frame-pointers -C target-cpu=native"
-RUST_BACKTRACE=1
+export RUSTFLAGS="-C force-frame-pointers -C target-cpu=native --cfg stream_profiling"
+#RUST_BACKTRACE=1
 #TEXT=~/dev/test_data/100M_rand_text.txt
 TEXT=~/dev/test_data/rand_text.txt
 
@@ -13,7 +13,7 @@ cd rustwp
 cargo build --release
 cd ..
 
-cargo build --release
+cargo build --release -v
 
 gcc -march=native -O2 wp.c -o wc-seq-c
 

@@ -32,6 +32,7 @@ impl<S, F, U> Stream for InstrumentedMap<S, F>
     type Item = U;
     type Error = S::Error;
 
+    #[cfg(stream_profiling)]
     fn poll(&mut self) -> Poll<Option<U>, S::Error> {
         let option = try_ready!(self.stream.poll());
         let result = match option {
@@ -48,5 +49,11 @@ impl<S, F, U> Stream for InstrumentedMap<S, F>
         };
 
         Ok(Async::Ready(result))
+    }
+
+    #[cfg(not(stream_profiling))]
+    fn poll(&mut self) -> Poll<Option<U>, S::Error> {
+        let option = try_ready!(self.stream.poll());
+        Ok(Async::Ready(option.map(|item| (self.function)(item) )))
     }
 }

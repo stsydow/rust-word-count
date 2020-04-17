@@ -1,4 +1,6 @@
-use futures::{try_ready, Async, Poll, Sink, StartSend};
+use futures::{try_ready, Async, Poll, Future, Sink, Stream, StartSend};
+use tokio;
+use tokio::sync::mpsc::{channel, Receiver};
 
 pub struct ForkRR<S: Sink> {
     pipelines: Vec<Option<S>>,
@@ -18,6 +20,37 @@ impl<S: Sink> ForkRR<S> {
             cursor: 0,
         }
     }
+}
+
+pub fn fork_stream<S>(stream:S, degree:usize) -> Vec<Receiver<S::Item>>
+where S:Stream + 'static,
+S::Error: std::fmt::Display,
+S::Item: Send,
+S: Send,
+{
+        let mut streams = Vec::new();
+        let mut sinks = Vec::new();
+        for _i in 0..degree {
+            let (tx, rx) = channel::<S::Item>(1);
+            sinks.push(tx);
+            streams.push(rx);
+        }
+        let fork = ForkRR::new(sinks);
+
+        let fork_task = stream
+            .forward(fork.sink_map_err(|e| {
+                eprintln!("fork send error:{}", e);
+                panic!()
+        }))
+        .map(|(_in, _out)| ())
+        .map_err(|e| {
+            eprintln!("error: {}", e);
+            panic!()
+        });
+
+        tokio::spawn(fork_task);
+
+        streams
 }
 
 impl<S: Sink> Sink for ForkRR<S> {

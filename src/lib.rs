@@ -62,6 +62,23 @@ pub trait StreamExt: Stream {
     {
         selective_context::selective_context(self, ctx_builder, selector, work)
     }
+
+    fn fork(self, degree: usize) -> Vec<tokio::sync::mpsc::Receiver<Self::Item>>
+        where
+            Self::Error: std::fmt::Display,
+            Self::Item: Send,
+        Self: Sized + Send + 'static,
+    {
+        stream_fork::fork_stream(self, degree)
+    }
+}
+
+//TODO ????
+pub trait ParallelStream
+{
+    type Stream;
+
+
 }
 
 /* TODO
