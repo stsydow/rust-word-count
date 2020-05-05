@@ -35,18 +35,22 @@ impl LogHistogram {
         }
     }
 
-    pub fn sample(&mut self, ref_time: &Instant) {
+    pub fn add_sample_ns(&mut self, value: u64) {
+        self.sum += value;
+        let t_max_n = value.max(self.max);
+        self.max = t_max_n;
+        let t_min_n = value.min(self.min);
+        self.min = t_min_n;
+        self.hist[(64 - value.leading_zeros()) as usize] += 1u64;
+    }
+
+    pub fn sample_now(&mut self, ref_time: &Instant) {
                 let difference = ref_time.elapsed()
                     .as_nanos() as u64;
                 // TODO use TSC for lower overhead:
                 // https://crates.io/crates/tsc-timer
                 // http://gz.github.io/rust-perfcnt/x86/time/fn.rdtsc.html
-                self.sum += difference;
-                let t_max_n = difference.max(self.max);
-                self.max = t_max_n;
-                let t_min_n = difference.min(self.min);
-                self.min = t_min_n;
-                self.hist[(64 - difference.leading_zeros()) as usize] += 1u64;
+        self.add_sample_ns(difference);
     }
 
     fn sparkline(& self) -> String {

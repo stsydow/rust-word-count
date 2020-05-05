@@ -20,6 +20,7 @@ pub use crate::log_histogram::LogHistogram;
 pub mod instrumented_map;
 pub mod instrumented_fold;
 
+use std::time::{ Instant };
 use tokio::prelude::*;
 
 impl<T: ?Sized> StreamExt for T where T: Stream {}
@@ -71,12 +72,40 @@ pub trait StreamExt: Stream {
     {
         stream_fork::fork_stream(self, degree)
     }
+
+    fn meter(self, name: String) -> probe_stream::Meter<Self>
+        where Self: Sized
+    {
+        probe_stream::Meter::new(self, name)
+    }
+
+    fn tag(self) -> probe_stream::Tag<Self>
+        where Self: Sized
+    {
+        probe_stream::Tag::new(self)
+    }
+
+    fn probe<I>(self, name: String) -> probe_stream::Probe<Self>
+        where Self: Stream<Item=(Instant, I)>,
+            Self: Sized
+    {
+        probe_stream::Probe::new(self, name)
+    }
 }
 
 //TODO ????
-pub trait ParallelStream
+/*pub trait ParallelStream
 {
     type Stream;
+
+
+}
+*/
+pub struct ParallelStream<S,Sel>
+{
+    tagged: bool,
+    partitioing:Option<Sel>,
+    streams: Vec<S>,
 
 
 }

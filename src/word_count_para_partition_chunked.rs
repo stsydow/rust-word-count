@@ -67,7 +67,7 @@ fn task_fn(stream: Receiver<Vec<Bytes>>) -> impl Future<Item = FreqTable, Error 
                     *frequency.entry(word).or_insert(0) += 1;
                 }
             }
-            hist.sample(&tag_time);
+            hist.sample_now(&tag_time);
             future::ok::<(LogHistogram, FreqTable), io::Error>((hist, frequency))
         }).map(|(hist, frequency)| {
             hist.print_stats("count");
@@ -124,7 +124,7 @@ fn main() -> io::Result<()> {
             for (word, count) in sub_table.drain() {
                 *frequency.entry(word).or_insert(0) += count;
             }
-            hist.sample(&tag_time);
+            hist.sample_now(&tag_time);
             future::ok::<(LogHistogram, FreqTable), io::Error>((hist, frequency))
         })
         .map(|(hist, frequency)| {

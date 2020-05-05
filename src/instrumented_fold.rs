@@ -76,7 +76,7 @@ impl<S, F, Fut, T> Future for InstrumentedFold<S, F, Fut, T>
                 State::Processing((start_time, mut fut)) => {
                     match fut.poll()? {
                         Async::Ready(state) => {
-                            self.hist.sample(&start_time);
+                            self.hist.sample_now(&start_time);
                             self.state = State::Ready(state)
                         },
                         Async::NotReady => {

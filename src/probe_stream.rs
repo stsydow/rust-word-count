@@ -30,6 +30,57 @@ impl<S, I>  Stream for Tag<S>
     }
 }
 
+pub struct Meter<S>
+{
+    name: String,
+    hist: LogHistogram,
+    last_stamp: Option<Instant>,
+    stream: S
+}
+
+impl<S> Meter<S>
+{
+    pub fn new(stream: S, name: String) -> Self {
+        Meter {
+            name,
+            hist: LogHistogram::new(),
+            last_stamp: None,
+            stream
+        }
+    }
+}
+
+impl<S, I>  Stream for Meter<S>
+    where S: Stream<Item=I>
+{
+    type Item = S::Item;
+    type Error = S::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        let result = self.stream.poll();
+        let now = Instant::now();
+        match result {
+            Err(ref _err) => {
+                //error!("stream err!");
+            }
+            Ok(Async::NotReady) => {
+
+            },
+            Ok(Async::Ready(None)) => {
+                self.hist.print_stats(&self.name);
+            },
+            Ok(Async::Ready(Some(ref _item))) => {
+                if let Some(last_time) = self.last_stamp {
+                    let diff = now.duration_since(last_time).as_nanos() as u64;
+                    self.hist.add_sample_ns(diff);
+                }
+                self.last_stamp = Some(now);
+            }
+        };
+
+        result
+    }
+}
 
 pub struct Probe<S>
 {
@@ -72,7 +123,7 @@ impl<S, I>  Stream for Probe<S>
                 self.hist.print_stats(&self.name);
             },
             Ok(Async::Ready(Some((ref time, ref _item)))) => {
-                self.hist.sample(time);
+                self.hist.sample_now(time);
             }
         };
 
