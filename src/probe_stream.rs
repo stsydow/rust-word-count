@@ -131,5 +131,46 @@ impl<S, I>  Stream for Probe<S>
     }
 }
 
+pub struct Map<S, F>
+{
+    stream: S,
+    function: F
+}
+
+impl<S, F, Item, U> Map<S, F>
+where S: Stream<Item=(Instant, Item)>,
+      F: FnMut(Item) -> U,
+{
+    pub fn new(stream: S, function: F) -> Map<S, F>
+    {
+        Map {
+            stream,
+            function,
+        }
+    }
+}
+
+impl<S, F, I, U> Stream for Map<S, F>
+where S: Stream<Item=(Instant, I)>,
+      F: FnMut(I) -> U,
+{
+    type Item = (Instant, U);
+    type Error = S::Error;
+
+    fn poll(&mut self) -> Poll<Option<(Instant, U)>, S::Error> {
+        let option = try_ready!(self.stream.poll());
+        let result = match option {
+            None => {
+                None
+            },
+            Some((timestamp, item)) => {
+                let f_result = (self.function)(item);
+                Some((timestamp, f_result))
+            }
+        };
+
+        Ok(Async::Ready(result))
+    }
+}
 
 //TODO ProbeAndTag?

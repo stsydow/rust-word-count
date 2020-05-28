@@ -89,7 +89,8 @@ fn main() -> io::Result<()> {
         let mut senders = Vec::new();
         //let mut join = Join::new(|(_word, count)| { *count});
 
-        let pipe_theards = max(1, conf.threads - 1); // discount I/O Thread
+        //let pipe_theards = max(1, conf.threads - 1); // discount I/O Thread
+        let pipe_theards = max(1, conf.threads); 
         let (out_tx, out_rx) = channel::<FreqTable>(pipe_theards);
         for _i in 0..pipe_theards {
             let (in_tx, in_rx) = channel::<Vec<Bytes>>(BUFFER_SIZE);

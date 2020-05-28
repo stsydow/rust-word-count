@@ -1,3 +1,5 @@
+- map() for  TimedStream
+
 - Profiling: ifdef in rust:
 https://doc.rust-lang.org/reference/conditional-compilation.html
 https://rust-embedded.github.io/book/c-tips/index.html

@@ -76,7 +76,7 @@ fn forward_task<InItem, OutItem, S, FBuildPipeline, OutStream, E>(
 }
 
 
-#[inline(never)]
+//#[inline(never)]
 fn count_fn(stream: Receiver<Bytes>) -> impl Future<Item=Vec<(Bytes, u64)>, Error = io::Error> {
     let item_stream = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
@@ -91,7 +91,7 @@ fn count_fn(stream: Receiver<Bytes>) -> impl Future<Item=Vec<(Bytes, u64)>, Erro
     item_stream
 }
 
-#[inline(never)]
+//#[inline(never)]
 fn acc_fn(stream: Receiver<Vec<(Bytes, u64)>>) -> impl Future<Item=Vec<(Bytes, u64)>, Error = io::Error> {
     let part = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))

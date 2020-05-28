@@ -41,9 +41,9 @@ impl<S, F, U> Stream for InstrumentedMap<S, F>
                 None
             },
             Some(item) => {
-                let time = Instant::now();
+                let start = Instant::now();
                 let result = (self.function)(item);
-                self.hist.sample(&time);
+                self.hist.sample_now(&start);
                 Some(result)
             }
         };

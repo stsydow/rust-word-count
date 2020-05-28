@@ -23,6 +23,8 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use std::cmp::max;
 use word_count::stream_fork::ForkRR;
+//use word_count::StreamExt;
+//use word_count::TimedStream;
 
 const BUFFER_SIZE: usize = 4;
 
@@ -94,6 +96,7 @@ fn main() -> io::Result<()> {
     };
 
     let file_reader = input_stream
+        //.meter("file_src".to_string())
         .forward(fork.sink_map_err(|e| {
             io::Error::new(io::ErrorKind::Other, format!("fork send error: {}", e))
         }))
@@ -131,6 +134,7 @@ fn main() -> io::Result<()> {
                 buffer
                     .write_fmt(format_args!("{} {}\n", word, count))
                     .expect("Formating error");
+                //for testing w/o output: // buffer.truncate(0);
             }
             buffer.freeze()
         })

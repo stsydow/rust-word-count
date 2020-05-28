@@ -84,15 +84,26 @@ pub trait StreamExt: Stream {
     {
         probe_stream::Tag::new(self)
     }
+}
 
-    fn probe<I>(self, name: String) -> probe_stream::Probe<Self>
-        where Self: Stream<Item=(Instant, I)>,
+impl<T: ?Sized, I> TimedStream<I> for T where T: Stream<Item=(Instant, I)> {}
+
+pub trait TimedStream<I>: Stream<Item=(Instant, I)> {
+    fn probe(self, name: String) -> probe_stream::Probe<Self>
+        where Self: TimedStream<I>,
             Self: Sized
     {
         probe_stream::Probe::new(self, name)
     }
-}
 
+    fn map<U, F>(self, f: F) -> probe_stream::Map<Self, F>
+        where F: FnMut(I) -> U,
+              Self: Sized
+    {
+        probe_stream::Map::new(self, f)
+    }
+
+}
 //TODO ????
 /*pub trait ParallelStream
 {
@@ -100,7 +111,9 @@ pub trait StreamExt: Stream {
 
 
 }
-*/
+
+>>> or as Struct?
+
 pub struct ParallelStream<S,Sel>
 {
     tagged: bool,
@@ -109,6 +122,7 @@ pub struct ParallelStream<S,Sel>
 
 
 }
+*/
 
 /* TODO
 // see https://github.com/async-rs/parallel-stream/
