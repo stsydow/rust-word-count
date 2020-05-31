@@ -4,8 +4,8 @@ export RUSTFLAGS="-C target-cpu=native"
 #RUST_BACKTRACE=1
 #TEXT=~/dev/test_data/100M_rand_text.txt
 #TEXT=./test_data/rand_text.txt
-TEXT=./test_data/big_text.txt
-#TEXT=~/word-count/test_data/pico-text
+#TEXT=./test_data/big_text.txt
+TEXT=~/word-count/test_data/pico-text
 
 RUNS=3
 PERF="perf stat -r${RUNS} -e duration_time,task-clock,cycles,instructions,cache-misses,page-faults,context-switches,cpu-migrations"
@@ -23,7 +23,7 @@ function runpico {
 	CPU_RANGE="0-$(($CPUS - 1))"
 	export PARDEG=$CPUS
 	echo "PARDEG=$PARDEG"
-	taskset -c "0-$(($PARDEG - 1))" $PERF $PICOWC $TEXT  /dev/null
+	taskset -c $CPU_RANGE $PERF $PICOWC $TEXT  /dev/null
 }
 
 function runrustwp {
@@ -49,14 +49,14 @@ RANGE="20 16 10 8 4 2 1";
 
 for T in $RANGE
 do 
-	run $T ./target/release/wc-parallel-partition-shuffle-chunked;
+	#run $T ./target/release/wc-parallel-partition-shuffle-chunked;
 	runpico $T;
-	runrustwp $T;
+	#runrustwp $T;
  	#run $T ./target/release/wc-parallel-partition-buf;	
 done
 run 1 ./target/release/wc-async-buf 
 #run 1 ./target/release/wc-seq-buf
-run 1 ./wc-seq-c 
+#run 1 ./wc-seq-c 
 exit
 
 #$PERF ./wc-seq-c $TEXT>  /dev/null

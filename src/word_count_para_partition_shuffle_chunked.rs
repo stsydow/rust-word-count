@@ -112,13 +112,28 @@ fn acc_fn(stream: Receiver<Vec<(Bytes, u64)>>) -> impl Future<Item=Vec<(Bytes, u
 
 fn main() -> io::Result<()> {
     let conf = parse_args("word count parallel buf");
-    let mut runtime = Runtime::new()?;
-
     let (input, output) = open_io_async(&conf);
 
     let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
     let pipe_threads = max(1, conf.threads);
+    //let mut runtime = Runtime::new()?;
+    
+
+    use std::time::Duration;
+
+    //use tokio_timer::clock::Clock;
+    use tokio::runtime::Builder;
+    let mut runtime = Builder::new()
+        //.blocking_threads(pipe_threads/4+1)
+        //.blocking_threads(2)
+        //.clock(Clock::system())
+        .core_threads(pipe_threads)
+        .keep_alive(Some(Duration::from_secs(1)))
+        //.name_prefix("my-custom-name-")
+        //.stack_size(16 * 1024 * 1024)
+        .build()?;
+
 
     let (fork, join) = {
         let mut senders = Vec::new();

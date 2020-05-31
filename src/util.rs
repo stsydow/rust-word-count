@@ -146,7 +146,9 @@ impl Decoder for WordVecCodec {
     }
 }
 
-pub struct WholeWordsCodec {}
+pub struct WholeWordsCodec {
+    //buffer: BytesMut
+}
 
 impl WholeWordsCodec {
     pub fn new() -> Self {
@@ -167,6 +169,12 @@ impl Decoder for WholeWordsCodec {
                 format!("max word length exceeded {:#?}B", buf.len()),
             ));
         }
+        //TODO hacky hack
+        /*
+        if(buf.len() < 8192*16) {
+            return Ok(None);
+        }
+        */
 
         let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
