@@ -86,7 +86,7 @@ impl LogHistogram {
     }
 
     pub fn print_stats(&self, name: &str) {
-        println!("[{}] ops: {} acc_time:{} mean_time:{}\n 5%:{} med:_{}_ 95%:{}\n min: {} |{}| max: {}",
+        eprintln!("[{}] ops: {} acc_time:{} mean_time:{}\n 5%:{} med:_{}_ 95%:{}\n min: {} |{}| max: {}",
         name, self.size(), format_nanos(self.sum as f32), format_nanos(self.sum as f32 / self.size() as f32),
         format_nanos(self.percentile(0.05)), format_nanos(self.percentile(0.5)), format_nanos(self.percentile(0.95)),
         format_nanos(self.min as f32), self.sparkline() ,format_nanos(self.max as f32)

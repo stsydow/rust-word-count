@@ -12,12 +12,10 @@ use std::iter::FromIterator;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::future;
 use futures::stream;
-use futures::Stream;
+//use futures::Stream;
 use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
-
-use word_count::util::*;
 
 use tokio::sync::mpsc::{channel, Receiver};
 
@@ -25,6 +23,10 @@ use std::cmp::max;
 use word_count::stream_fork::ForkRR;
 use word_count::stream_shuffle_buffered::ShuffleBuffered;
 use tokio::sync::mpsc::error::SendError;
+
+use std::time::Instant;
+use word_count::util::*;
+use word_count::{StreamExt};
 
 const BUFFER_SIZE: usize = 4;
 
@@ -80,11 +82,11 @@ fn forward_task<InItem, OutItem, S, FBuildPipeline, OutStream, E>(
 fn count_fn(stream: Receiver<Bytes>) -> impl Future<Item=Vec<(Bytes, u64)>, Error = io::Error> {
     let item_stream = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(FreqTable::new(), |mut frequency, text| {
+        .instrumented_fold(FreqTable::new(), |mut frequency, text| {
             count_bytes(&mut frequency, &text);
 
             future::ok::<FreqTable, io::Error>(frequency)
-        })
+        }, "split_and_count".to_owned())
         .map(move |mut frequency|{
             Vec::from_iter(frequency.drain())
         });
@@ -95,14 +97,14 @@ fn count_fn(stream: Receiver<Bytes>) -> impl Future<Item=Vec<(Bytes, u64)>, Erro
 fn acc_fn(stream: Receiver<Vec<(Bytes, u64)>>) -> impl Future<Item=Vec<(Bytes, u64)>, Error = io::Error> {
     let part = stream
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(FreqTable::new(), |mut frequency, chunk| {
+        .instrumented_fold(FreqTable::new(), |mut frequency, chunk| {
 
             for (word, count) in chunk {
                 *frequency.entry(word).or_insert(0) += count;
             }
 
             future::ok::<FreqTable, io::Error>(frequency)
-        }).map(move |mut sub_table| {
+        }, "merge_table".to_owned()).map(move |mut sub_table| {
             let freq = Vec::from_iter(sub_table.drain());
             //freq.sort_unstable_by_key(|&(_, a)| a); //presort seems slower
             freq
@@ -187,15 +189,19 @@ fn main() -> io::Result<()> {
             future::ok::<Vec<(Bytes, u64)>, io::Error>(frequency)
         })
         .map(|mut frequency| {
+            let sort_time = Instant::now();
             //frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
             //frequency.sort_by_cached_key(|&(_, a)| a);
             //frequency.sort_by_key(|&(_, a)| a);
             //frequency.sort_unstable_by(|&(_, a), &(_, b)| b.cmp(&a));
             frequency.sort_unstable_by_key(|&(_, a)| a);
             //frequency.chunks(CHUNKS_CAPACITY) // <- TODO performance?
+            eprintln!("sorttime:{:?}", sort_time.elapsed());
             stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY)
         }).flatten_stream()
-        .map(|chunk| {
+        .instrumented_map(
+        //.map(
+            |chunk: Vec<(Bytes, u64)>| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
                 let word = utf8(&word_raw).expect("UTF8 encoding error");
@@ -208,7 +214,7 @@ fn main() -> io::Result<()> {
                     .expect("Formating error");
             }
             buffer.freeze()
-        })
+        }, "format_chunk".to_owned())
         .forward(output_stream);
 
     let (_word_stream, _out_file) = runtime.block_on(file_writer)?;

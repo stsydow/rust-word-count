@@ -16,7 +16,7 @@ function run {
 	CPUS=$1
 	CPU_RANGE="0-$(($CPUS - 1))"
 	BINARY=$2
-	taskset -c $CPU_RANGE $PERF $BINARY -t$1 $TEXT #> /dev/null
+	taskset -c $CPU_RANGE $PERF $BINARY -t$1 $TEXT > /dev/null
 }
 
 function runpico {
@@ -48,6 +48,7 @@ gcc -march=native -O3 wp.c -o wc-seq-c
 #$PERF ./wc-seq-c $TEXT >  /dev/null
 RANGE="10 4 1"; 
 
+run 1 ./target/release/wc-async-buf 
 for T in $RANGE
 do 
 	run $T ./target/release/wc-parallel-partition-shuffle-chunked;
@@ -55,7 +56,6 @@ do
 	#runrustwp $T;
  	#run $T ./target/release/wc-parallel-partition-buf;	
 done
-run 1 ./target/release/wc-async-buf 
 run 1 ./target/release/wc-async 
 #run 1 ./target/release/wc-seq-buf
 #run 1 ./wc-seq-c 
