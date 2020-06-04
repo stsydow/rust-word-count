@@ -21,8 +21,8 @@ use word_count::util::*;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use std::cmp::max;
-use word_count::stream_fork::Fork;
-use word_count::stream_join::Join;
+use parallel_stream::stream_fork::Fork;
+use parallel_stream::stream_join::Join;
 
 const BUFFER_SIZE: usize = 4;
 

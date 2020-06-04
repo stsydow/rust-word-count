@@ -20,13 +20,13 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use std::cmp::max;
-use word_count::stream_fork::ForkRR;
-use word_count::stream_shuffle_buffered::ShuffleBuffered;
+use parallel_stream::stream_fork::ForkRR;
+use parallel_stream::stream_shuffle_buffered::ShuffleBuffered;
 use tokio::sync::mpsc::error::SendError;
 
 use std::time::Instant;
 use word_count::util::*;
-use word_count::{StreamExt};
+use parallel_stream::{StreamExt};
 
 const BUFFER_SIZE: usize = 4;
 
@@ -120,7 +120,7 @@ fn main() -> io::Result<()> {
     let output_stream = FramedWrite::new(output, BytesCodec::new());
     let pipe_threads = max(1, conf.threads);
     //let mut runtime = Runtime::new()?;
-    
+
 
     use std::time::Duration;
 

@@ -22,10 +22,10 @@ use word_count::util::*;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use std::cmp::max;
-use word_count::stream_fork::ForkRR;
+use parallel_stream::stream_fork::ForkRR;
 
-use word_count::probe_stream::*;
-use word_count::LogHistogram;
+use parallel_stream::probe_stream::*;
+use parallel_stream::LogHistogram;
 use std::time::Instant;
 
 const BUFFER_SIZE: usize = 4;
@@ -90,7 +90,7 @@ fn main() -> io::Result<()> {
         //let mut join = Join::new(|(_word, count)| { *count});
 
         //let pipe_theards = max(1, conf.threads - 1); // discount I/O Thread
-        let pipe_theards = max(1, conf.threads); 
+        let pipe_theards = max(1, conf.threads);
         let (out_tx, out_rx) = channel::<FreqTable>(pipe_theards);
         for _i in 0..pipe_theards {
             let (in_tx, in_rx) = channel::<Vec<Bytes>>(BUFFER_SIZE);

@@ -2,9 +2,9 @@
 #export RUSTFLAGS="-C target-cpu=native --cfg stream_profiling"
 export RUSTFLAGS="-C target-cpu=native"
 #RUST_BACKTRACE=1
-#TEXT=~/dev/test_data/100M_rand_text.txt
+TEXT=~/dev/test_data/100M_rand_text.txt
 #TEXT=./test_data/rand_text.txt
-TEXT=./test_data/big_text.txt
+#TEXT=./test_data/big_text.txt
 #TEXT=~/word-count/test_data/pico-text
 
 RUNS=3
@@ -43,20 +43,21 @@ cargo build --release -v
 gcc -march=native -O3 wp.c -o wc-seq-c
 
 #run 1 ./target/release/wc-parallel-partition-buf
-#run 1 ./target/release/wc-async 
+#run 1 ./target/release/wc-async
 #$PERF ./wc-seq-c $TEXT >  /dev/null
-RANGE="20 16 10 8 4 2 1"; 
+#RANGE="20 16 10 8 4 2 1";
+RANGE="4 2 1";
 
 for T in $RANGE
-do 
+do
 	run $T ./target/release/wc-parallel-partition-shuffle-chunked;
 	runpico $T;
 	runrustwp $T;
- 	#run $T ./target/release/wc-parallel-partition-buf;	
+ 	#run $T ./target/release/wc-parallel-partition-buf;
 done
-run 1 ./target/release/wc-async-buf 
+run 1 ./target/release/wc-async-buf
 #run 1 ./target/release/wc-seq-buf
-run 1 ./wc-seq-c 
+run 1 ./wc-seq-c
 exit
 
 #$PERF ./wc-seq-c $TEXT>  /dev/null

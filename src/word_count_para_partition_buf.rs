@@ -22,7 +22,8 @@ use word_count::util::*;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use std::cmp::max;
-use word_count::stream_fork::ForkRR;
+use parallel_stream::stream_fork::ForkRR;
+
 //use word_count::StreamExt;
 //use word_count::TimedStream;
 
@@ -123,6 +124,7 @@ fn main() -> io::Result<()> {
             stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
         })
         .flatten_stream()
+        //TODO//.tag()
         .map(|chunk| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {

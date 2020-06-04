@@ -75,6 +75,7 @@ futures = "0.1"
 bytes = "0.4"
 libc = "0.2"
 #timely = "0.10"
+parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git"}
 
 [dependencies.tokio]
 version = "0.1"

@@ -14,8 +14,7 @@ use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use word_count::util::*;
 use std::time::Instant;
-use word_count::util::*;
-use word_count::{StreamExt};
+use parallel_stream::{StreamExt};
 
 fn main() -> StdResult<()> {
     let conf = parse_args("word count async buf");
