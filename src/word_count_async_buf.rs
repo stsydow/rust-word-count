@@ -36,7 +36,8 @@ fn main() -> StdResult<()> {
         .map(|frequency| {
             let sort_time = Instant::now();
             let mut frequency_vec = Vec::from_iter(frequency);
-            frequency_vec.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            //frequency_vec.sort_unstable_by_key(|&(_, f)| f);
+            frequency_vec.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
             eprintln!("sorttime:{:?}", sort_time.elapsed());
             stream::iter_ok(frequency_vec)
         })

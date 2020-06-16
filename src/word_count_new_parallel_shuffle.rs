@@ -80,7 +80,7 @@ fn main() {
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
         .map(|mut frequency| {
             let sort_time = Instant::now();
-            frequency.sort_unstable_by_key(|&(_, a)| a);
+            frequency.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
             eprintln!("sorttime:{:?}", sort_time.elapsed());
             stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY)
         })

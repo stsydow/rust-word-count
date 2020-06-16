@@ -58,7 +58,7 @@ fn main() -> io::Result<()> {
 
     // Sort by value
     let mut frequency = Vec::from_iter(frequency);
-    frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+    frequency.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
 
     write_out(&frequency)
 }

@@ -58,7 +58,8 @@ fn main() {
         }, &mut exec)
         .map(|frequency| {
             let mut frequency_vec = Vec::from_iter(frequency.into_iter());
-            frequency_vec.sort_unstable_by_key(|&(_, a)| a);
+            //frequency_vec.sort_unstable_by_key(|&(_, f)| f);
+            frequency_vec.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
             stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
         })
         .flatten_stream()
