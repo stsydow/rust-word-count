@@ -50,12 +50,12 @@ fn main() {
 
             future::ok(frequency)
         }, "split_and_count".to_owned())
-        .instrumented_fold(FreqTable::new(), |mut frequency, sub_table| {
+        .merge(FreqTable::new(), |mut frequency, sub_table| {
             for (word, count) in sub_table {
                 *frequency.entry(word).or_insert(0) += count;
             }
             future::ok(frequency)
-        }, "merge".to_owned())
+        }, &mut exec)
         .map(|frequency| {
             let mut frequency_vec = Vec::from_iter(frequency.into_iter());
             frequency_vec.sort_unstable_by_key(|&(_, a)| a);

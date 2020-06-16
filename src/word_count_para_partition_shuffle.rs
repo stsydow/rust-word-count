@@ -22,8 +22,7 @@ use word_count::util::*;
 use tokio::sync::mpsc::{channel, Receiver};
 
 use std::cmp::max;
-use parallel_stream::stream_fork::ForkRR;
-use parallel_stream::stream_shuffle::Shuffle;
+use parallel_stream::{StreamExt, ParallelStream};
 use tokio::sync::mpsc::error::SendError;
 
 const BUFFER_SIZE: usize = 4;

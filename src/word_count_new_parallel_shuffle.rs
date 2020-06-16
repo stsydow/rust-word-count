@@ -24,13 +24,10 @@ use word_count::util::*;
 use parallel_stream::{StreamExt, StreamChunkedExt};
 
 const CHUNKS_CAPACITY: usize = 256;
+const BUFFER_SIZE: usize = 4;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
-    let (input, output) = open_io_async(&conf);
-
-    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
-    let output_stream = FramedWrite::new(output, BytesCodec::new());
     let pipe_threads = max(1, conf.threads);
 
     let mut runtime = Runtime::new().expect("can't create runtime");
@@ -50,19 +47,22 @@ fn main() {
         .build().expect("can't create runtime");
     */
 
-    let sub_table_streams = input_stream.fork(pipe_threads, &mut exec)
+    let (start_usr_time, start_sys_time) =  get_cputime_usecs();
+    let start_time = Instant::now();
+
+    let (input, output) = open_io_async(&conf);
+    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
+    let output_stream = FramedWrite::new(output, BytesCodec::new());
+
+    let task = input_stream.fork(pipe_threads, BUFFER_SIZE, &mut exec)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, text| {
             count_bytes(&mut frequency, &text);
 
             future::ok::<FreqTable, _>(frequency)
         }, "split_and_count".to_owned())
-    .map(|frequency|{
-        Vec::from_iter(frequency)
-    });
-
-    let result_stream = sub_table_streams
-        .instrumented_map_chunked(|e| e, "test".to_owned())
-        .fork_sel_chunked( |(word, _count)| word.len() , pipe_threads, &mut exec)
+        .map_result(|frequency| stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY) )
+        .flatten_stream()
+        .shuffle_unordered_chunked( |(word, _count)| word.len() , pipe_threads, BUFFER_SIZE, &mut exec)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, chunk| {
 
             for (word, count) in chunk {
@@ -71,25 +71,21 @@ fn main() {
 
             future::ok::<FreqTable, _>(frequency)
         }, "merge_table".to_owned())
-        .map(|sub_table| Vec::from_iter(sub_table.into_iter()));
-
-    let file_writer = result_stream
+        .map_result(|sub_table| Vec::from_iter(sub_table))
+        .merge(Vec::new(), |mut frequency, mut part| {
+                frequency.append(&mut part);
+                future::ok::<Vec<(Bytes, u64)>, _>(frequency)
+            },
+            &mut exec)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
-        .fold(Vec::new(), |mut frequency, mut part| {
-            frequency.append(&mut part);
-            future::ok::<Vec<(Bytes, u64)>, io::Error>(frequency)
-        })
         .map(|mut frequency| {
             let sort_time = Instant::now();
-            //frequency.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
-            //frequency.sort_by_key(|&(_, a)| a);
             frequency.sort_unstable_by_key(|&(_, a)| a);
-            //frequency.chunks(CHUNKS_CAPACITY) // <- TODO performance?
             eprintln!("sorttime:{:?}", sort_time.elapsed());
             stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY)
-        }).flatten_stream()
+        })
+        .flatten_stream()
         .instrumented_map(
-        //.map(
             |chunk: Vec<(Bytes, u64)>| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
@@ -107,7 +103,14 @@ fn main() {
         .forward(output_stream)
         .map_err(|e| {panic!("processing error: {:#?}", e)} );
 
-    let (_word_stream, _out_file) = runtime.block_on(file_writer).expect("error whil running task");
-    runtime.shutdown_on_idle();
+    let (_word_stream, _out_file) = runtime.block_on(task).expect("error whil running task");
 
+    let difference = start_time.elapsed();
+    let (end_usr_time, end_sys_time) = get_cputime_usecs();
+    let usr_time = (end_usr_time - start_usr_time) as f64 / 1000_000.0;
+    let sys_time = (end_sys_time - start_sys_time) as f64 / 1000_000.0;
+    eprintln!("walltime: {:?} (usr: {:.3}s sys: {:.3}s)",
+        difference, usr_time, sys_time);
+
+    runtime.shutdown_on_idle();
 }
