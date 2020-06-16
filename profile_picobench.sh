@@ -43,20 +43,21 @@ cargo build --release -v
 gcc -march=native -O3 wp.c -o wc-seq-c
 
 #run 1 ./target/release/wc-parallel-partition-buf
-#run 1 ./target/release/wc-async 
+#run 1 ./target/release/wc-async
 #$PERF ./wc-seq-c $TEXT >  /dev/null
-RANGE="20 16 10 8 4 2 1"; 
+RANGE="20 16 10 8 4 2 1";
 
 for T in $RANGE
-do 
-	#run $T ./target/release/wc-parallel-partition-shuffle-chunked;
+do
+	run $T ./target/release/wc-parallel-partition-shuffle-chunked;
+	run $T ./target/release/wc-parallel-new;
 	runpico $T;
 	#runrustwp $T;
- 	#run $T ./target/release/wc-parallel-partition-buf;	
+ 	#run $T ./target/release/wc-parallel-partition-buf;
 done
-run 1 ./target/release/wc-async-buf 
+run 1 ./target/release/wc-async-buf
 #run 1 ./target/release/wc-seq-buf
-#run 1 ./wc-seq-c 
+#run 1 ./wc-seq-c
 exit
 
 #$PERF ./wc-seq-c $TEXT>  /dev/null
