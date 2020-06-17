@@ -31,7 +31,7 @@ function run {
 function runpico {
 	CPUS=$1
 	CPU_RANGE="0-$(($CPUS - 1))"
-	echo "BENCH pico-wc-${CPUS}-${TEXT_ID}" >> $DATA_FILE
+	echo "BENCH: pico-wc-${CPUS}-${TEXT_ID}" >> $DATA_FILE
 	export PARDEG=$CPUS
 	taskset -c "0-$(($PARDEG - 1))" $PERF $PICOWC $TEXT  /dev/null
 }
@@ -39,7 +39,7 @@ function runpico {
 function runrustwp {
 	CPUS=$1
 	CPU_RANGE="0-$(($CPUS - 1))"
-	echo "BENCH rustwp-${CPUS}-${TEXT_ID}" >> $DATA_FILE
+	echo "BENCH: rustwp-${CPUS}-${TEXT_ID}" >> $DATA_FILE
 	taskset -c $CPU_RANGE $PERF ./rustwp/target/release/rustwp $CPUS $TEXT > /dev/null
 }
 
@@ -64,7 +64,7 @@ do
 done
 run 1 ./target/release/wc-async-buf
 #run 1 ./target/release/wc-seq-buf
-echo "BENCH wc-seq-c-1-${TEXT_ID}" >> $DATA_FILE
+echo "BENCH: wc-seq-c-1-${TEXT_ID}" >> $DATA_FILE
 $PERF ./wc-seq-c $TEXT > /dev/null
 
 

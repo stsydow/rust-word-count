@@ -3,6 +3,7 @@
 
 import sys
 import re
+from os.path import basename
 
 from dateutil.parser import parse
 
@@ -54,7 +55,7 @@ def main():
             if be_match:
 
                 fields = be_match.groupdict()
-                experiment_name = fields['experiment'] + '-' + fields['size']
+                experiment_name = basename(fields['experiment']) + '-' + fields['size']
                 threads = int(fields['threads'])
 
                 if not experiment_name in experiments:
@@ -87,11 +88,13 @@ def main():
         with open(dat_file_name, "w") as f:
             experiment_set = experiments[ex_name]
             f.write("# {}\n".format(ex_name))
-            f.write("threads\twalltime\tcputime\tdate\n")
+            f.write("threads\twalltime\tcputime\tspeedup\tdate\n")
+            seq_time = experiment_set[1]['duration_time']
             for threads in experiment_set:
                 row = experiment_set[threads]
-                f.write("{:d}\t{}\t{}\t{}\n".format(threads, row['duration_time'],
-                    row['task-clock'], row['date'].isoformat()))
+                speedup = seq_time/row['duration_time']
+                f.write("{:d}\t{}\t{}\t{}\t{}\n".format(threads, row['duration_time'],
+                    row['task-clock'], speedup, row['date'].isoformat()))
 
 if __name__ == "__main__":
     main()

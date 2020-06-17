@@ -3,7 +3,7 @@ use std::fmt::Write;
 use std::io;
 use std::iter::FromIterator;
 
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use futures::future;
 use futures::stream;
 use futures::Stream;
@@ -11,25 +11,17 @@ use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
-use word_count::util::*;
-
 use std::time::Instant;
-use parallel_stream::{StreamExt, StreamChunkedExt};
+use word_count::util::*;
+use parallel_stream::{StreamExt};
 
 const CHUNKS_CAPACITY: usize = 256;
+const BUFFER_SIZE: usize = 4;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
     let mut runtime = Runtime::new().expect("can't create runtime");
     let mut exec = runtime.executor();
-
-    let (start_usr_time, start_sys_time) =  get_cputime_usecs();
-    let start_time = Instant::now();
-    let (input, output) = open_io_async(&conf);
-
-    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
-    let output_stream = FramedWrite::new(output, BytesCodec::new());
-
 
     //use tokio_timer::clock::Clock;
     /*
@@ -43,8 +35,15 @@ fn main() {
         //.stack_size(16 * 1024 * 1024)
         .build().expect("can't create runtime");
     */
-    let task = input_stream.fork(conf.threads, 4, &mut exec)
 
+    let (start_usr_time, start_sys_time) =  get_cputime_usecs();
+    let start_time = Instant::now();
+
+    let (input, output) = open_io_async(&conf);
+    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
+    let output_stream = FramedWrite::new(output, BytesCodec::new());
+
+    let task = input_stream.fork(conf.threads, BUFFER_SIZE, &mut exec)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, text| {
             count_bytes(&mut frequency, &text);
 
@@ -56,14 +55,15 @@ fn main() {
             }
             future::ok(frequency)
         }, &mut exec)
-        .map(|frequency| {
-            let mut frequency_vec = Vec::from_iter(frequency.into_iter());
-            frequency_vec.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
-            stream::iter_ok(frequency_vec).chunks(CHUNKS_CAPACITY) // <- TODO performance?
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+        .map(|frequency_map| {
+            let mut frequency = Vec::from_iter(frequency_map);
+            frequency.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
+            stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY) // <- TODO performance?
         })
         .flatten_stream()
-        .decouple(2,&mut exec)
-        .instrumented_map(|chunk| {
+        //.decouple(BUFFER_SIZE, &mut exec)
+        .instrumented_map(|chunk: Vec<(Bytes, u64)>| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
                 let word = utf8(&word_raw).expect("UTF8 encoding error");
@@ -76,8 +76,7 @@ fn main() {
                     .expect("Formating error");
             }
             buffer.freeze()
-        }, "format".to_owned())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+        }, "format_chunk".to_owned())
         .forward(output_stream)
         .map_err(|e| {panic!("processing error: {:#?}", e)} );
 
@@ -88,6 +87,6 @@ fn main() {
     let sys_time = (end_sys_time - start_sys_time) as f64 / 1000_000.0;
     eprintln!("walltime: {:?} (usr: {:.3}s sys: {:.3}s)",
         difference, usr_time, sys_time);
-    runtime.shutdown_on_idle();
 
+    runtime.shutdown_on_idle();
 }
