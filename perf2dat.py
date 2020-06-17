@@ -25,7 +25,7 @@ def scale_by_unit(value, unit):
 def main():
 
     if len(sys.argv) < 2:
-        print("usage: "+ sys.argv[0] +" <perf_stat.csv> <out_folder> # esle ./data/")
+        print("usage: "+ sys.argv[0] +" <perf_stat.csv> <out_folder> # else ./data/")
         sys.exit(1)
 
     out_folder = OUT_FOLDER_DEFAULT
