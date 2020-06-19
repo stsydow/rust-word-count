@@ -310,8 +310,8 @@ dependencies = [
 
 [[package]]
 name = "parallel-stream"
-version = "0.2.10"
-source = "git+file:///home/st/thesis/code/parallel-stream#dde025a89fadc8e878283125de73dc76bd50dd29"
+version = "0.2.11"
+source = "git+ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git#724c6a0940e3aa18874382ca1b8e1761c5907737"
 dependencies = [
  "argparse 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -602,7 +602,7 @@ dependencies = [
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "parallel-stream 0.2.10 (git+file:///home/st/thesis/code/parallel-stream)",
+ "parallel-stream 0.2.11 (git+ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git)",
  "simplelog 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -656,7 +656,7 @@ dependencies = [
 "checksum num-integer 0.1.43 (registry+https://github.com/rust-lang/crates.io-index)" = "8d59457e662d541ba17869cf51cf177c0b5f0cbf476c66bdc90bf1edac4f875b"
 "checksum num-traits 0.2.12 (registry+https://github.com/rust-lang/crates.io-index)" = "ac267bcc07f48ee5f8935ab0d24f316fb722d7a1292e2913f0cc196b29ffd611"
 "checksum num_cpus 1.13.0 (registry+https://github.com/rust-lang/crates.io-index)" = "05499f3756671c15885fee9034446956fff3f243d6077b91e5767df161f766b3"
-"checksum parallel-stream 0.2.10 (git+file:///home/st/thesis/code/parallel-stream)" = "<none>"
+"checksum parallel-stream 0.2.11 (git+ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git)" = "<none>"
 "checksum parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f842b1982eb6c2fe34036a4fbfb06dd185a3f5c8edfaacdf7d1ea10b07de6252"
 "checksum parking_lot_core 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b876b1b9e7ac6e1a74a6da34d25c42e17e8862aa409cbbbdcfc8d86c6f3bc62b"
 "checksum redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)" = "2439c63f3f6139d1b57529d16bc3b8bb855230c8efcc5d3a896c8bea7c3b1e84"

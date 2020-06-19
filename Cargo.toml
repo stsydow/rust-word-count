@@ -12,9 +12,9 @@ path = "src/word_count_seq.rs"
 name = "wc-seq-buf"
 path = "src/word_count_seq_buf.rs"
 
-[[bin]]
-name = "wc-async"
-path = "src/word_count_async.rs"
+#[[bin]]
+#name = "wc-async"
+#path = "src/word_count_async.rs"
 
 [[bin]]
 name = "wc-async-buf"
@@ -52,9 +52,9 @@ path = "src/word_count_async_buf.rs"
 #name = "wc-parallel-partition-shuffle"
 #path = "src/word_count_para_partition_shuffle.rs"
 
-[[bin]]
-name = "wc-parallel-partition-shuffle-chunked"
-path = "src/word_count_para_partition_shuffle_chunked.rs"
+#[[bin]]
+#name = "wc-parallel-partition-shuffle-chunked"
+#path = "src/word_count_para_partition_shuffle_chunked.rs"
 
 [[bin]]
 name = "wc-parallel-new"
@@ -68,6 +68,10 @@ path = "src/word_count_new_parallel_shuffle.rs"
 #name = "wc-timely"
 #path = "src/word_count_timely.rs"
 
+[[bin]]
+name = "async-read"
+path = "src/async_read.rs"
+
 [workspace]
 exclude = [
     "rustwp",
@@ -78,12 +82,13 @@ argparse = "0.2"
 log = "0.4"
 simplelog = "0.7"
 #tokio = "0.1"
+#tokio-io = "0.1"
 futures = "0.1"
 bytes = "0.4"
 libc = "0.2"
 #timely = "0.10"
-#parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git"}
-parallel-stream = {git = "file:///home/st/thesis/code/parallel-stream"}
+parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git"}
+#parallel-stream = {git = "file:///home/st/thesis/code/parallel-stream"}
 
 [dependencies.tokio]
 version = "0.1"

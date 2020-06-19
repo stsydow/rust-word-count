@@ -170,11 +170,9 @@ impl Decoder for WholeWordsCodec {
             ));
         }
         //TODO hacky hack
-        /*
         if(buf.len() < 8192*16) {
             return Ok(None);
         }
-        */
 
         let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()

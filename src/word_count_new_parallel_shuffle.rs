@@ -17,7 +17,7 @@ use word_count::util::*;
 use parallel_stream::{StreamExt};
 
 const CHUNKS_CAPACITY: usize = 256;
-const BUFFER_SIZE: usize = 4;
+const BUFFER_SIZE: usize = 32; //4;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
@@ -42,6 +42,14 @@ fn main() {
 
     let (input, output) = open_io_async(&conf);
     let input_stream = FramedRead::new(input, WholeWordsCodec::new());
+    /*
+    let input_stream = FramedRead {
+                    inner: framed_read2_with_buffer(
+                    Fuse(input, WholeWordsCodec::new()),
+                    BytesMut::with_capacity(8129*8)
+                    ),
+                    };
+    */
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
     let task = input_stream.fork(conf.threads, BUFFER_SIZE, &mut exec)
@@ -52,7 +60,10 @@ fn main() {
         }, "split_and_count".to_owned())
         .map_result(|frequency| stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY) )
         .flatten_stream()
-        .shuffle_unordered_chunked( |(word, _count)| word.len() , conf.threads, BUFFER_SIZE, &mut exec)
+        .shuffle_unordered_chunked( |(word, _count)| 
+            ((word[0] as usize) << 8) + word.len(), 
+            std::cmp::min(16, conf.threads), 
+            BUFFER_SIZE, &mut exec)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, sub_table| {
 
             for (word, count) in sub_table {
