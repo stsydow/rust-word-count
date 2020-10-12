@@ -6,15 +6,14 @@
 
 use std::io::Result as StdResult;
 
-use tokio::codec::{BytesCodec, FramedRead, /*FramedWrite*/};
+use tokio_util::codec::{/*BytesCodec,*/ FramedRead, /*FramedWrite*/};
 //use tokio_io::framed_read::{framed_read2, framed_read2_with_buffer, FramedRead2};
 //use tokio_io::framed::Fuse;
-use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use word_count::util::*;
 use std::time::Instant;
-use bytes::{BufMut, Bytes, BytesMut};
-use futures::future;
+//use bytes::{BufMut, Bytes, BytesMut};
+use futures::StreamExt;
 
 fn main() -> StdResult<()> {
     let conf = parse_args("word count async buf");
@@ -24,7 +23,7 @@ fn main() -> StdResult<()> {
 
     let (input, _output) = open_io_async(&conf);
 
-    let input_stream = FramedRead::new(input, BytesCodec::new());
+    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     /*
     let input_stream = FramedRead {
                     inner: framed_read2_with_buffer(
@@ -33,8 +32,8 @@ fn main() -> StdResult<()> {
                     ),
                     };
     */
-    let dbg_future = input_stream.for_each(|_b| Ok(()));
-    let _r = runtime.block_on(dbg_future)?;
+    let dbg_future = input_stream.for_each(|_b| async {()});
+    let _r = runtime.block_on(dbg_future);
 
     /*
     let output_stream = FramedWrite::new(output, BytesCodec::new());
@@ -50,7 +49,6 @@ fn main() -> StdResult<()> {
     let sys_time = (end_sys_time - start_sys_time) as f64 / 1000_000.0;
     eprintln!("walltime: {:?} (usr: {:.3}s sys: {:.3}s)",
         difference, usr_time, sys_time);
-    runtime.shutdown_on_idle();
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 use argparse::{ArgumentParser, Print, Store, StoreOption};
 use std::collections::HashMap;
 use std::{io, str, usize};
+use std::pin::Pin;
 
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
@@ -8,7 +9,7 @@ use tokio::prelude::*;
 use tokio::runtime::Runtime;
 
 use bytes::{Bytes, BytesMut};
-use tokio::codec::Decoder;
+use tokio_util::codec::Decoder;
 
 pub struct RawWordCodec {}
 
@@ -64,7 +65,7 @@ impl Decoder for RawWordCodec {
                 if buf.is_empty() {
                     None
                 } else {
-                    let word = buf.take();
+                    let word = buf.split();
                     Some(word)
                 }
             }
@@ -138,7 +139,7 @@ impl Decoder for WordVecCodec {
                     None
                 } else {
                     let mut word = Vec::with_capacity(1);
-                    word.push(buf.take().freeze());
+                    word.push(buf.split().freeze());
                     Some(word)
                 }
             }
@@ -156,6 +157,7 @@ impl WholeWordsCodec {
     }
 }
 
+const BUFFER_SIZE:usize = 8192*16; 
 impl Decoder for WholeWordsCodec {
     type Item = Bytes;
     // TODO: in the next breaking change, this should be changed to a custom
@@ -170,9 +172,11 @@ impl Decoder for WholeWordsCodec {
             ));
         }
         //TODO hacky hack
-        if(buf.len() < 8192*16) {
+        /*
+        if(buf.len() < BUFFER_SIZE) {
             return Ok(None);
         }
+        */
 
         let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
@@ -180,8 +184,10 @@ impl Decoder for WholeWordsCodec {
 
         let some_words = if let Some(last_space_idx) = last_space {
             let complete_words = buf.split_to(last_space_idx + 1);
+            buf.reserve(BUFFER_SIZE - buf.len());
             Some(complete_words.freeze())
         } else {
+            buf.reserve(BUFFER_SIZE - buf.len());
             None
         };
 
@@ -196,7 +202,7 @@ impl Decoder for WholeWordsCodec {
                 if buf.is_empty() {
                     None
                 } else {
-                    let word = buf.take().freeze();
+                    let word = buf.split().freeze();
                     Some(word)
                 }
             }
@@ -285,30 +291,29 @@ pub fn parse_args(description: &str) -> Config {
 }
 
 #[inline(never)]
-pub fn open_io_async(conf: &Config) -> (Box<dyn AsyncRead + Send>, Box<dyn AsyncWrite + Send>) {
+pub fn open_io_async(conf: &Config) -> (Pin<Box<dyn AsyncRead + Send>>, Pin<Box<dyn AsyncWrite + Send>>) {
     let mut runtime = Runtime::new().expect("can't start async runtime");
-    let input: Box<dyn AsyncRead + Send> = match &conf.input {
-        None => Box::new(stdin()),
+    let input: Pin<Box<dyn AsyncRead + Send>> = match &conf.input {
+        None => Box::pin(stdin()),
         Some(filename) => {
             let file_future = File::open(filename.clone());
             let byte_stream = runtime
                 .block_on(file_future)
                 .expect("Can't open input file.");
-            Box::new(byte_stream)
+            Box::pin(byte_stream)
         }
     };
 
-    let output: Box<dyn AsyncWrite + Send> = match &conf.output {
-        None => Box::new(stdout()),
+    let output: Pin<Box<dyn AsyncWrite + Send>> = match &conf.output {
+        None => Box::pin(stdout()),
         Some(filename) => {
-            let file_future = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .open(filename.clone());
+            let mut open_options = OpenOptions::new();
+            open_options.write(true).create(true);
+            let file_future = open_options.open(filename.clone());
             let byte_stream = runtime
                 .block_on(file_future)
                 .expect("Can't open output file.");
-            Box::new(byte_stream)
+            Box::pin(byte_stream)
         }
     };
 
@@ -322,7 +327,7 @@ pub fn count_bytes(frequency: &mut FreqTable, text: &Bytes) -> usize {
     let mut i_start: usize = 0;
     for i in 0..text.len() {
         if text[i].is_ascii_whitespace() {
-            let word = text.slice(i_start, i);
+            let word = text.slice(i_start .. i);
             if !word.is_empty() {
                 *frequency.entry(word).or_insert(0) += 1;
             }

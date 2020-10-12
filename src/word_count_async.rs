@@ -11,7 +11,7 @@ use std::iter::FromIterator;
 
 use bytes::Bytes;
 use futures::future::FutureResult;
-use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
+use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::prelude::*;
 use tokio::runtime::Runtime;
 use std::time::Instant;

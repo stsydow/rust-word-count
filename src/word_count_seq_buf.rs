@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Stdin};
 use std::iter::FromIterator;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut, Buf, BufMut, buf::BufExt};
 
 use word_count::util::*;
 
@@ -47,17 +47,16 @@ fn main() -> io::Result<()> {
     let mut buffered = read_file(&my_stdin)?;
 
     let mut frequency = FreqTable::new();
-    let mut buffer = Bytes::new();
+    let mut remainder = Bytes::new();
     loop {
         let raw_buffer = buffered.fill_buf()?;
         let amount = raw_buffer.len();
         if amount == 0 {
             break;
         }
-        buffer.extend_from_slice(&raw_buffer);
+        let buffer = remainder.chain(raw_buffer).to_bytes();
         let consumed = count_bytes(&mut frequency, &buffer);
-        let new_remainder = buffer.slice_from(consumed);
-        buffer = new_remainder;
+        remainder = buffer.slice(consumed..);
         buffered.consume(amount);
     }
 

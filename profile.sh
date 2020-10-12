@@ -1,5 +1,5 @@
 #!/bin/bash
-RUSTFLAGS="-C force-frame-pointers -C target-cpu=native"
+export RUSTFLAGS="-C force-frame-pointers -C target-cpu=native"
 TEXT=~/dev/test_data/rand_text.txt
 #TEXT=~/dev/test_data/100M_rand_text.txt
 
@@ -28,8 +28,14 @@ cargo build --release
 #$PERF target/release/wc-parallel-partition-buf -t4 $TEXT > /dev/null
 #perf script | c++filt | $GProf2dot | dot -Tsvg -o para-buf-output.svg
 
-$PERF target/release/wc-parallel-partition-shuffle-chunked -t4 $TEXT > /dev/null
+$PERF target/release/wc-parallel-partition-shuffle-chunked -t48 $TEXT > /dev/null
 perf script | c++filt | $GProf2dot | dot -Tsvg -o para-shuffle-output.svg
+
+$PERF target/release/wc-parallel-partition-shuffle-chunked -t48 $TEXT > /dev/null
+perf script | c++filt | $GProf2dot | dot -Tsvg -o new-shuffle-output.svg
+#run $T ./target/release/wc-parallel-partition-shuffle-chunked;
+#	run $T ./target/release/wc-parallel-shuffle-new;
+#	run $T ./target/release/wc-parallel-new;
 
 #perf script | ./FlameGraph/stackcollapse-perf.pl | c++filt | ./FlameGraph/flamegraph.pl --width 4000 > flame.svg
 

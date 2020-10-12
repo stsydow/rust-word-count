@@ -10,7 +10,7 @@ use std::iter::FromIterator;
 
 use bytes::{Bytes, BytesMut};
 use futures::future::FutureResult;
-use tokio::codec::{BytesCodec, FramedRead, FramedWrite};
+use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{stdin, stdout};
 use tokio::prelude::*;
