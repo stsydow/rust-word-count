@@ -1,7 +1,7 @@
 #export RUSTFLAGS="-C force-frame-pointers -C target-cpu=native --cfg stream_profiling"
 #export RUSTFLAGS="-C target-cpu=native --cfg stream_profiling"
 export RUSTFLAGS="-C target-cpu=native"
-#RUST_BACKTRACE=1
+#export RUST_BACKTRACE=1
 #TEXT=./test_data/100M_rand_text.txt
 #TEXT=./test_data/rand_text.txt
 #TEXT_ID=640M

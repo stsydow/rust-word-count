@@ -16,7 +16,7 @@ use word_count::util::*;
 use parallel_stream::{StreamExt};
 
 const CHUNKS_CAPACITY: usize = 256;
-const BUFFER_SIZE: usize = 32; //4;
+const BUFFER_SIZE: usize = 64;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
@@ -28,6 +28,7 @@ fn main() {
         //.blocking_threads(pipe_threads/4+1)
         //.blocking_threads(2)
         //.clock(Clock::system())
+        .threaded_scheduler()
         .core_threads(conf.threads +2)
         //.keep_alive(Some(Duration::from_secs(1)))
         //.stack_size(16 * 1024 * 1024)

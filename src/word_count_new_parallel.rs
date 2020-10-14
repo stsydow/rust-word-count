@@ -8,31 +8,29 @@ use futures::StreamExt as FutStreamExt;
 use futures::FutureExt;
 use parallel_stream::StreamExt;
 use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
-use tokio::runtime::Runtime;
+//use tokio::runtime::Runtime;
 
 use std::time::Instant;
 use word_count::util::*;
 
 const CHUNKS_CAPACITY: usize = 256;
-const BUFFER_SIZE: usize = 4;
+const CHANNEL_CAPACITY: usize = 64;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
-    let mut runtime = Runtime::new().expect("can't create runtime");
-    let mut exec = runtime.handle();
+    //let mut runtime = Runtime::new().expect("can't create runtime");
 
     //use tokio_timer::clock::Clock;
-    /*
     use tokio::runtime::Builder;
     let mut runtime = Builder::new()
+        .threaded_scheduler()
         //.blocking_threads(pipe_threads/4+1)
         //.blocking_threads(2)
-        //.clock(Clock::system())
-        .core_threads(pipe_threads)
-        .keep_alive(Some(Duration::from_secs(1)))
+        .core_threads(conf.threads + 2)
         //.stack_size(16 * 1024 * 1024)
         .build().expect("can't create runtime");
-    */
+
+    let mut exec = runtime.handle();
 
     let (start_usr_time, start_sys_time) =  get_cputime_usecs();
     let start_time = Instant::now();
@@ -41,24 +39,26 @@ fn main() {
     let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    let task = input_stream.fork(conf.threads, BUFFER_SIZE, &mut exec)
-        .instrumented_fold(|| FreqTable::new(), |mut frequency, text| async move {
+    let task = input_stream.fork(conf.threads, CHANNEL_CAPACITY, &mut exec)
+        .instrumented_fold(|| FreqTable::new(), |mut frequency, text| async {
             count_bytes(&mut frequency, &text.expect("io_error"));
             frequency
         }, "split_and_count".to_owned())
-        .merge(FreqTable::new(), |mut frequency, sub_table| async move {
+        .merge(FreqTable::new(), |mut frequency, sub_table| async {
             for (word, count) in sub_table {
                 *frequency.entry(word).or_insert(0) += count;
             }
+            println!("merge");
             frequency
         }, &mut exec)
         .map(|frequency_map| {
+            println!("sort");
             let mut frequency = Vec::from_iter(frequency_map);
             frequency.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
             stream::iter(frequency).chunks(CHUNKS_CAPACITY) // <- TODO performance?
         })
         .flatten_stream()
-        //.decouple(BUFFER_SIZE, &mut exec)
+        //.decouple(CHANNEL_CAPACITY, &mut exec)
         .instrumented_map(|chunk: Vec<(Bytes, u64)>| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
