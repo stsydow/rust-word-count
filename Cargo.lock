@@ -290,13 +290,10 @@ checksum = "260e51e7efe62b592207e9e13a68e43692a7a279171d6ba57abd208bf23645ad"
 [[package]]
 name = "parallel-stream"
 version = "0.3.1"
-source = "git+ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git?branch=futures-0.3#d44eb9d176f2d67a4504418f5f45ef84f3f2d1ce"
+source = "git+ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git?branch=futures-0.3#d3f9b2043204f83e1b25f227ad0927774a925a75"
 dependencies = [
- "argparse",
- "bytes",
  "futures",
- "log",
- "pin-project 1.0.0",
+ "pin-project 1.0.1",
  "tokio",
 ]
 
@@ -311,11 +308,11 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7d8ba72884f707ee1b9daf3e3f4692d84202df5c767552a8a0bb4615e9ad5d5"
+checksum = "ee41d838744f60d959d7074e3afb6b35c7456d0f61cad38a24e35e6553f73841"
 dependencies = [
- "pin-project-internal 1.0.0",
+ "pin-project-internal 1.0.1",
 ]
 
 [[package]]
@@ -331,9 +328,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-internal"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3bdf2be66f09649de0c194e9e7204df2fe9e9251834c25e94a0f502ba19cf2b"
+checksum = "81a4ffa594b66bff340084d4081df649a7dc049ac8d7fc458d8e628bfbbb2f86"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -430,9 +427,9 @@ checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 
 [[package]]
 name = "syn"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e03e57e4fcbfe7749842d53e24ccb9aa12b7252dbe5e91d2acad31834c8b8fdd"
+checksum = "ea9c5432ff16d6152371f808fb5a871cd67368171b09bb21b43df8e4a47a3556"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -462,9 +459,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.2.22"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d34ca54d84bf2b5b4d7d31e901a8464f7b60ac145a284fba25ceb801f2ddccd"
+checksum = "7137dbb0abee577362ccdc7df21605cfcbb949243aeab47dac9ea6ef7d830e21"
 dependencies = [
  "bytes",
  "fnv",
@@ -472,13 +469,14 @@ dependencies = [
  "memchr",
  "num_cpus",
  "pin-project-lite",
+ "slab",
 ]
 
 [[package]]
 name = "tokio-util"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
+checksum = "24793699f4665ba0416ed287dc794fe6b11a4aa5e4e95b58624f45f6c46b97d4"
 dependencies = [
  "bytes",
  "futures-core",

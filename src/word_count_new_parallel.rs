@@ -4,42 +4,46 @@ use std::iter::FromIterator;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{stream};
-use futures::StreamExt as FutStreamExt;
+use futures::StreamExt;
 use futures::FutureExt;
-use parallel_stream::StreamExt;
 use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
-//use tokio::runtime::Runtime;
+use parallel_stream::StreamExt as MyStreamExt;
 
 use std::time::Instant;
 use word_count::util::*;
 
 const CHUNKS_CAPACITY: usize = 256;
 const CHANNEL_CAPACITY: usize = 64;
+const BUFFER_SIZE:usize = 16*4096; 
 
 fn main() {
     let conf = parse_args("word count parallel buf");
     //let mut runtime = Runtime::new().expect("can't create runtime");
 
-    //use tokio_timer::clock::Clock;
     use tokio::runtime::Builder;
-    let mut runtime = Builder::new()
-        .threaded_scheduler()
-        //.blocking_threads(pipe_threads/4+1)
-        //.blocking_threads(2)
-        .core_threads(conf.threads + 2)
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(conf.threads)
+        .max_threads(conf.threads +2)
+        /*
+        .on_thread_start(|| {
+            eprintln!("thread started");
+        })
+        .on_thread_stop(|| {
+            eprintln!("thread stopping");
+        })
+        */
+        //.keep_alive(Some(Duration::from_secs(1)))
         //.stack_size(16 * 1024 * 1024)
         .build().expect("can't create runtime");
-
-    let mut exec = runtime.handle();
 
     let (start_usr_time, start_sys_time) =  get_cputime_usecs();
     let start_time = Instant::now();
 
     let (input, output) = open_io_async(&conf);
-    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
+    let input_stream = FramedRead::with_capacity(input, WholeWordsCodec::new(), BUFFER_SIZE);
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    let task = input_stream.fork(conf.threads, CHANNEL_CAPACITY, &mut exec)
+    let freq_stream = input_stream.fork(conf.threads, CHANNEL_CAPACITY, &runtime)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, text| async {
             count_bytes(&mut frequency, &text.expect("io_error"));
             frequency
@@ -50,7 +54,7 @@ fn main() {
             }
             println!("merge");
             frequency
-        }, &mut exec)
+        }, &runtime)
         .map(|frequency_map| {
             println!("sort");
             let mut frequency = Vec::from_iter(frequency_map);
@@ -58,7 +62,7 @@ fn main() {
             stream::iter(frequency).chunks(CHUNKS_CAPACITY) // <- TODO performance?
         })
         .flatten_stream()
-        //.decouple(CHANNEL_CAPACITY, &mut exec)
+        //.decouple(CHANNEL_CAPACITY, &runtime)
         .instrumented_map(|chunk: Vec<(Bytes, u64)>| {
             let mut buffer = BytesMut::with_capacity(CHUNKS_CAPACITY * 15);
             for (word_raw, count) in chunk {
@@ -72,9 +76,8 @@ fn main() {
                     .expect("Formating error");
             }
             buffer.freeze()
-        }, "format_chunk".to_owned())
-        .map(|i| Ok(i))
-        .forward(output_stream);
+        }, "format_chunk".to_owned());
+    let task = MyStreamExt::forward(freq_stream, output_stream);
 
     runtime.block_on(task).expect("error running main task");
     let difference = start_time.elapsed();

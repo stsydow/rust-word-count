@@ -157,7 +157,6 @@ impl WholeWordsCodec {
     }
 }
 
-const BUFFER_SIZE:usize = 8192*16; 
 impl Decoder for WholeWordsCodec {
     type Item = Bytes;
     // TODO: in the next breaking change, this should be changed to a custom
@@ -165,16 +164,6 @@ impl Decoder for WholeWordsCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Bytes>, io::Error> {
-        if buf.len() >= 1_000_000 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("max word length exceeded {:#?}B", buf.len()),
-            ));
-        }
-        //TODO hacky hack
-        if(buf.len() < BUFFER_SIZE) {
-            return Ok(None);
-        }
 
         let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
@@ -182,10 +171,8 @@ impl Decoder for WholeWordsCodec {
 
         let some_words = if let Some(last_space_idx) = last_space {
             let complete_words = buf.split_to(last_space_idx + 1);
-            buf.reserve(BUFFER_SIZE - buf.len());
             Some(complete_words.freeze())
         } else {
-            buf.reserve(BUFFER_SIZE - buf.len());
             None
         };
 
@@ -290,7 +277,7 @@ pub fn parse_args(description: &str) -> Config {
 
 #[inline(never)]
 pub fn open_io_async(conf: &Config) -> (Pin<Box<dyn AsyncRead + Send>>, Pin<Box<dyn AsyncWrite + Send>>) {
-    let mut runtime = Runtime::new().expect("can't start async runtime");
+    let runtime = Runtime::new().expect("can't start async runtime");
     let input: Pin<Box<dyn AsyncRead + Send>> = match &conf.input {
         None => Box::pin(stdin()),
         Some(filename) => {

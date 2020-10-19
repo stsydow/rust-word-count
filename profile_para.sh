@@ -1,5 +1,5 @@
 export RUSTFLAGS="-C target-cpu=native"
-RUST_BACKTRACE=1
+#export RUST_BACKTRACE=1
 
 #TEXT=./test_data/100M_rand_text.txt
 #TEXT_ID=100M
@@ -7,11 +7,11 @@ RUST_BACKTRACE=1
 #TEXT=./test_data/rand_text.txt
 #TEXT_ID=600M
 
-#TEXT=./test_data/big_rand_text.txt
-#TEXT_ID=6G
+TEXT=./test_data/big_rand_text.txt
+TEXT_ID=6G
 
-TEXT=./test_data/pico-text
-TEXT_ID=1024w6G
+#TEXT=./test_data/pico-text
+#TEXT_ID=1024w6G
 
 DATA_FILE="para.data"
 RUNS=3
@@ -54,11 +54,11 @@ RANGE="96 64 48 32 24 16 8 4 2 1"
 
 for T in $RANGE
 do
-	run $T ./target/release/wc-parallel-partition-shuffle-chunked;
+	#run $T ./target/release/wc-parallel-partition-shuffle-chunked;
 	#run $T ./target/release/wc-parallel-partition-buf;
 	#run $T ./pgo-wc-parallel-partition-shuffle-chunked;
 	run $T ./target/release/wc-parallel-shuffle-new;
-	run $T ./target/release/wc-parallel-new;
+	#run $T ./target/release/wc-parallel-new;
 	runpico $T;
 	runrustwp $T;
 done

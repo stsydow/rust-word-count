@@ -86,25 +86,24 @@ simplelog = "0.7"
 futures = "0.3"
 bytes = "0.5"
 libc = "0.2"
+#itertools = "0.9"
 #timely = "0.10"
 parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git",  branch = "futures-0.3"}
 #parallel-stream = {git = "file:///home/st/thesis/code/parallel-stream"}
 
 [dependencies.tokio]
-version = "0.2"
-#default-features = false
-#default features = ["codec", "fs", "io", "reactor", "rt-full", "sync", "tcp", "timer", "udp", "uds"]
-features = ["io-std", "rt-threaded", "fs", "sync", "stream"]
-#features = ["codec", "fs", "io", "rt-full", "sync"]
+version = "0.3"
+features = ["io-std", "rt", "rt-multi-thread", "fs", "sync", "stream"]
 
 [dependencies.tokio-util]
-version = "0.3"
+version = "0.4"
 features = ["codec"]
 
 [profile.release]
-lto= "fat"
+#lto= "fat"
+lto= "thin"
 opt-level = 3
-#debug = 1
+debug = 1
 codegen-units = 1
 panic = "abort"
 

@@ -6,62 +6,57 @@ use std::iter::FromIterator;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::stream;
 use futures::FutureExt;
-use futures::TryFutureExt;
-use futures::StreamExt as FutStreamExt;
+use futures::StreamExt;
 use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
-//use tokio::runtime::Runtime;
 
 use std::time::Instant;
 use word_count::util::*;
-use parallel_stream::{StreamExt};
+use parallel_stream::StreamExt as MyStreamExt;
 
-const CHUNKS_CAPACITY: usize = 256;
-const BUFFER_SIZE: usize = 64;
+const CHUNKS_CAPACITY: usize = 1024;
+const BUFFER_SIZE: usize = 16*4096;
+const CHANNEL_SIZE: usize = 64;
 
 fn main() {
     let conf = parse_args("word count parallel buf");
     //let mut runtime = Runtime::new().expect("can't create runtime");
 
-    //use tokio_timer::clock::Clock;
     use tokio::runtime::Builder;
-    let mut runtime = Builder::new()
-        //.blocking_threads(pipe_threads/4+1)
-        //.blocking_threads(2)
-        //.clock(Clock::system())
-        .threaded_scheduler()
-        .core_threads(conf.threads +2)
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(conf.threads)
+        .max_threads(conf.threads +2)
+        /*
+        .on_thread_start(|| {
+            eprintln!("thread started");
+        })
+        .on_thread_stop(|| {
+            eprintln!("thread stopping");
+        })
+        */
         //.keep_alive(Some(Duration::from_secs(1)))
         //.stack_size(16 * 1024 * 1024)
         .build().expect("can't create runtime");
-    let mut exec = runtime.handle();
 
     let (start_usr_time, start_sys_time) =  get_cputime_usecs();
     let start_time = Instant::now();
 
     let (input, output) = open_io_async(&conf);
-    let input_stream = FramedRead::new(input, WholeWordsCodec::new());
-    /*
-    let input_stream = FramedRead {
-                    inner: framed_read2_with_buffer(
-                    Fuse(input, WholeWordsCodec::new()),
-                    BytesMut::with_capacity(8129*8)
-                    ),
-                    };
-    */
+    let input_stream = FramedRead::with_capacity(input , WholeWordsCodec::new(), BUFFER_SIZE);
     let output_stream = FramedWrite::new(output, BytesCodec::new());
 
-    let task = input_stream.fork(conf.threads, BUFFER_SIZE, &mut exec)
+    let freq_stream = input_stream.fork(conf.threads, CHANNEL_SIZE, &runtime)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, text| async move{
             count_bytes(&mut frequency, &text.expect("io error"));
 
             frequency
         }, "split_and_count".to_owned())
-        .map_result(|frequency| stream::iter(frequency).chunks(CHUNKS_CAPACITY) )
+        .map_result(|frequency| stream::iter(frequency).chunks(CHUNKS_CAPACITY))
         .flatten_stream()
         .shuffle_unordered_chunked( |(word, _count)| 
             ((word[0] as usize) << 8) + word.len(), 
-            std::cmp::min(16, conf.threads), 
-            BUFFER_SIZE, &mut exec)
+            //std::cmp::min(16, conf.threads), 
+            1 + conf.threads/2, 
+            CHANNEL_SIZE, &runtime)
         .instrumented_fold(|| FreqTable::new(), |mut frequency, sub_table| async move {
 
             for (word, count) in sub_table {
@@ -74,8 +69,7 @@ fn main() {
                 frequency.append(&mut part);
                 frequency
             },
-            &mut exec)
-        //.map_err(|e| io::Error::new(io::ErrorKind::Other, format!("recv error: {:#?}", e)))
+            &runtime)
         .map(|mut frequency| {
             frequency.sort_unstable_by(|(ref w_a, ref f_a), (ref w_b, ref f_b)| f_b.cmp(&f_a).then(w_b.cmp(&w_a)));
             stream::iter(frequency).chunks(CHUNKS_CAPACITY) // <- TODO performance?
@@ -94,10 +88,8 @@ fn main() {
                     .expect("Formating error");
             }
             buffer.freeze()
-        }, "format_chunk".to_owned())
-        .map(|i| Ok(i))
-        .forward(output_stream)
-        .map_err(|e| {panic!("processing error: {:#?}", e)} );
+        }, "format_chunk".to_owned());
+    let task = MyStreamExt::forward(freq_stream, output_stream);
 
     runtime.block_on(task).expect("error running main task");
     let difference = start_time.elapsed();
