@@ -156,6 +156,7 @@ impl WholeWordsCodec {
     }
 }
 
+const BUFFER_SIZE:usize = 8192*16; 
 impl Decoder for WholeWordsCodec {
     type Item = Bytes;
     // TODO: in the next breaking change, this should be changed to a custom
@@ -169,10 +170,6 @@ impl Decoder for WholeWordsCodec {
                 format!("max word length exceeded {:#?}B", buf.len()),
             ));
         }
-        //TODO hacky hack
-        if(buf.len() < 8192*16) {
-            return Ok(None);
-        }
 
         let last_space = buf //[self.last_cursor..] // TODO use last cursor
             .iter()
@@ -185,6 +182,8 @@ impl Decoder for WholeWordsCodec {
             None
         };
 
+        //TODO hacky hack
+        buf.reserve(BUFFER_SIZE - buf.len());
         return Ok(some_words);
     }
 

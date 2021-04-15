@@ -87,8 +87,8 @@ futures = "0.1"
 bytes = "0.4"
 libc = "0.2"
 #timely = "0.10"
-parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git"}
-#parallel-stream = {git = "file:///home/st/thesis/code/parallel-stream"}
+#parallel-stream = {git = "ssh://git@gitlab.tubit.tu-berlin.de/stefan.sydow/parallel-stream-rs.git"}
+parallel-stream = {git = "file:///root/parallel-stream-0.1"}
 
 [dependencies.tokio]
 version = "0.1"
@@ -97,10 +97,11 @@ default-features = false
 features = ["codec", "fs", "io", "rt-full", "sync"]
 
 [profile.release]
-lto= "fat"
+#lto= "fat"
+lto= "thin"
 opt-level = 3
 #debug = 1
-codegen-units = 1
+codegen-units = 4
 panic = "abort"
 
 [profile.dev]

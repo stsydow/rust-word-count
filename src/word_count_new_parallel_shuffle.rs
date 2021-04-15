@@ -16,26 +16,28 @@ use std::time::Instant;
 use word_count::util::*;
 use parallel_stream::{StreamExt};
 
-const CHUNKS_CAPACITY: usize = 256;
-const BUFFER_SIZE: usize = 32; //4;
+//const CHUNKS_CAPACITY: usize = 256;
+const CHUNKS_CAPACITY: usize = 1024;
+const BUFFER_SIZE: usize = 64;
+
 
 fn main() {
     let conf = parse_args("word count parallel buf");
     let mut runtime = Runtime::new().expect("can't create runtime");
-    let mut exec = runtime.executor();
 
-    //use tokio_timer::clock::Clock;
     /*
+    //use tokio_timer::clock::Clock;
     use tokio::runtime::Builder;
     let mut runtime = Builder::new()
-        //.blocking_threads(pipe_threads/4+1)
+        //.blocking_threads(pipe_threads)
         //.blocking_threads(2)
         //.clock(Clock::system())
-        .core_threads(pipe_threads)
-        .keep_alive(Some(Duration::from_secs(1)))
+        .core_threads(((conf.threads + 1) * 9) / 8) //theads + 1 and 1 extra every 8
+        //.keep_alive(Some(Duration::from_secs(1)))
         //.stack_size(16 * 1024 * 1024)
         .build().expect("can't create runtime");
     */
+    let mut exec = runtime.executor();
 
     let (start_usr_time, start_sys_time) =  get_cputime_usecs();
     let start_time = Instant::now();
@@ -58,12 +60,22 @@ fn main() {
 
             future::ok(frequency)
         }, "split_and_count".to_owned())
-        .map_result(|frequency| stream::iter_ok(frequency).chunks(CHUNKS_CAPACITY) )
+        .map_result(|frequency| stream::iter_ok(frequency))//.chunks(CHUNKS_CAPACITY) 
         .flatten_stream()
+        .add_stage(|s| s.chunks(CHUNKS_CAPACITY))
         .shuffle_unordered_chunked( |(word, _count)| 
             ((word[0] as usize) << 8) + word.len(), 
-            std::cmp::min(16, conf.threads), 
+            //std::cmp::min(16, conf.threads), 
+            1 + conf.threads/2,
             BUFFER_SIZE, &mut exec)
+        /*
+        .shuffle_unordered( |(word, _count)| 
+            ((word[0] as usize) << 8) + word.len(), 
+            //std::cmp::min(16, conf.threads), 
+            1 + conf.threads/2,
+            BUFFER_SIZE, &mut exec)
+        .add_stage(|s| s.chunks(CHUNKS_CAPACITY))
+        */
         .instrumented_fold(|| FreqTable::new(), |mut frequency, sub_table| {
 
             for (word, count) in sub_table {

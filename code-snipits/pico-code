@@ -1,0 +1,44 @@
+#include <iostream>
+#include <string>
+
+#include "pico/pico.hpp"
+
+int main(int argc, char** argv) {
+  using KV = pico::KeyValue<std::string, int>;
+
+  if (argc < 3) {
+    std::cerr << "Usage: ./pico_wc <input file> <output file> \n";
+    return -1;
+  }
+  std::string in_fname(argv[1]), out_fname(argv[2]);
+
+  pico::FlatMap<std::string, KV> tokenizer(
+      [](std::string& in, pico::FlatMapCollector<KV>& collector) {
+        std::string::size_type i = 0, j;
+        while ((j = in.find_first_of(' ', i)) != std::string::npos) {
+          collector.add(KV(in.substr(i, j - i), 1));
+          i = j + 1;
+        }
+        if (i < in.size()) collector.add(KV(in.substr(i, in.size() - i), 1));
+      });
+
+  auto countWords =
+      pico::Pipe()         // the empty pipeline
+          .add(tokenizer)  //
+          .add(pico::ReduceByKey<KV>([](int v1, int v2) { return v1 + v2; }));
+
+  pico::ReadFromFile reader(in_fname);
+  pico::WriteToDisk<KV> writer(out_fname);
+
+  auto wc = pico::Pipe()         // the empty pipeline
+                .add(reader)     //
+                .to(countWords)  //
+                .add(writer);
+
+  wc.run();
+
+  std::cout << "done in " << wc.pipe_time() << " ms\n";
+
+  return 0;
+}
+

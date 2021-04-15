@@ -85,16 +85,18 @@ def main():
 
     for ex_name in experiments:
         dat_file_name = "{}/{}.dat".format(out_folder, ex_name)
-        with open(dat_file_name, "w") as f:
+        with open(dat_file_name, "w+") as f:
             experiment_set = experiments[ex_name]
             f.write("# {}\n".format(ex_name))
-            f.write("threads\twalltime\tcputime\tspeedup\tdate\n")
+            f.write("threads\twalltime\tcputime\tspeedup\tinstructions\tcachemisses\tcontextswitches\tcpumigrations\tdate\n")
             seq_time = experiment_set[1]['duration_time']
             for threads in experiment_set:
                 row = experiment_set[threads]
                 speedup = seq_time/row['duration_time']
-                f.write("{:d}\t{}\t{}\t{}\t{}\n".format(threads, row['duration_time'],
-                    row['task-clock'], speedup, row['date'].isoformat()))
+                f.write("{:d}\t{:.4f}\t{:.4f}\t{:.4f}\t{:d}\t{:d}\t{:d}\t{:d}\t{}\n".format(threads, 
+                    row['duration_time'], row['task-clock'], speedup, 
+                    row['instructions'], row['cache-misses'], row['context-switches'], row['cpu-migrations'], 
+                    row['date'].isoformat()))
 
 if __name__ == "__main__":
     main()

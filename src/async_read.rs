@@ -25,6 +25,7 @@ fn main() -> StdResult<()> {
     let (input, _output) = open_io_async(&conf);
 
     let input_stream = FramedRead::new(input, BytesCodec::new());
+    //let input_stream = FramedRead::new(input, WholeWordsCodec::new());
     /*
     let input_stream = FramedRead {
                     inner: framed_read2_with_buffer(

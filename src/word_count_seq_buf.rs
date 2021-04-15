@@ -12,6 +12,8 @@ use bytes::Bytes;
 
 use word_count::util::*;
 
+const BUFFER_SIZE: usize = 16 * 4069;
+
 #[inline(never)]
 fn read_file<'a>(my_stdin: &'a Stdin) -> io::Result<Box<dyn BufRead + 'a>> {
     let conf = parse_args("word count simple");
@@ -19,7 +21,7 @@ fn read_file<'a>(my_stdin: &'a Stdin) -> io::Result<Box<dyn BufRead + 'a>> {
     let io_box: Box<dyn BufRead> = match conf.input {
         Some(filename) => {
             let file = File::open(filename)?;
-            Box::new(BufReader::new(file))
+            Box::new(BufReader::with_capacity(BUFFER_SIZE, file))
         }
         None => Box::new(my_stdin.lock()),
     };
